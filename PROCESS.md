@@ -93,6 +93,26 @@ me, which is the whole premise. It now wears the player's own comet silhouette
 a comet rather than a ball, so the shape carries the idea before the colour
 does.
 
+### 6. The metaphor was load-bearing, and I had it as decoration
+
+Played again, the abstract version still failed the same line, for a reason I
+had been treating as an art problem: two shapes touching each other is not a
+reason to touch them. A glowing dot could be read as a hazard, or as scenery,
+or the whole board as something to watch rather than steer, and no amount of
+pulse or particle fixes that.
+
+What fixed it was a metaphor that carries the rules for free: a mouse wants
+cheese, a cat wants the mouse, a cat follows prints. That last one is the piece
+nothing else supplied --- "why does the enemy retrace my exact route" was the
+only question the design could not answer about itself, and a cat with its nose
+down answers it before anyone asks ([`15efc54`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-xiaoma638/commit/15efc54)).
+
+Timing the round rather than looking at it then found two more: glued to the
+pointer the mouse teleported, and the round was won in 3.5 seconds before the
+first cat had finished arriving; and cheese was being placed at whichever legal
+spot stood clearest of the cats, quietly routing every trip around the danger
+in a game that is supposed to be about ground you have already covered.
+
 ## What the tests cannot judge
 
 Whether a stranger reaches an ending inside five minutes, and whether the
