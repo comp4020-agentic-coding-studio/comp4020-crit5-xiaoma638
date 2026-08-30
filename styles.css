@@ -96,11 +96,11 @@ nav a:focus-visible {
   pointer-events: none;
 }
 
-/* Eight wedges of cheese, filling in as they are eaten. */
+/* Eight gems, filling in as they are lifted. */
 #tally li {
-  width: 0.62rem;
-  height: 0.54rem;
-  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+  width: 0.55rem;
+  height: 0.62rem;
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
   background: rgba(125, 136, 176, 0.22);
   transition: background 260ms ease;
 }

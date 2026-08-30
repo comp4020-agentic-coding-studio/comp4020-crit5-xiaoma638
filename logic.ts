@@ -17,48 +17,55 @@ export interface TrailPoint {
   t: number;
 }
 
-/** The cats are asleep in their bed from the first frame. Cheese wakes one:
-    ears, eyes, a stretch, out of the bed, nose to the floor, and only then does
-    it follow. Nothing before "tracking" can touch anyone --- and none of it is
+/** The drones are asleep in their bay from the first frame. Cheese wakes one:
+    ears, eyes, a stretch, out of the bay, nose to the floor, and only then does
+    it follow. Nothing before "hunting" can touch anyone --- and none of it is
     a system announcing a spawn, it is an animal being woken by a noise. */
-export type CatState = "sleeping" | "waking" | "leaving" | "sniffing" | "tracking";
+export type DroneState = "docked" | "booting" | "leaving" | "locking" | "hunting";
 
-export interface Cat {
+export interface Drone {
   id: number;
   /** Seconds behind you it reads the trail. */
   delay: number;
-  state: CatState;
+  state: DroneState;
   /** Seconds spent in the current stage. */
   stateFor: number;
   /** Elapsed time when it woke. The prints it will follow start here. */
   anchor: number;
-  /** The bed it came out of. */
+  /** Which charging slot it sits in, and where that slot is. */
+  slot: number;
   from: Vec;
   /** True once it can actually catch you. */
   live: boolean;
 }
 
-// Arriving takes exactly as long as the cat runs behind you, split three ways.
+// Arriving takes exactly as long as the drone runs behind you, split three ways.
 // That is not decoration: it means the moment its nose comes up, the prints it
 // has been standing over are the ones it starts to follow, with no jump.
-const SHARE: Record<string, number> = { waking: 0.4, leaving: 0.28, sniffing: 0.32 };
+const SHARE: Record<string, number> = { booting: 0.4, leaving: 0.28, locking: 0.32 };
 
-export function stageLength(cat: Cat, state: CatState): number {
-  return cat.delay * (SHARE[state] ?? 0);
+export function stageLength(drone: Drone, state: DroneState): number {
+  return drone.delay * (SHARE[state] ?? 0);
 }
 
-/** The bed, up in one corner of the room. */
-export function bedAt(world: Vec): Vec {
-  return { x: world.x * 0.12, y: world.y * 0.18 };
+/** The security bay, along the left wall. */
+export function bayAt(world: Vec): Vec {
+  return { x: world.x * 0.1, y: world.y * 0.5 };
 }
 
-export interface Star {
+/** Charging slots run down the bay, so an empty one is countable. */
+export function slotAt(world: Vec, slot: number, of: number): Vec {
+  const bay = bayAt(world);
+  return { x: bay.x, y: bay.y + (slot - (of - 1) / 2) * world.y * 0.13 };
+}
+
+export interface Gem {
   x: number;
   y: number;
   born: number;
 }
 
-export type Spark = "star" | "caught" | "won" | "lure";
+export type Spark = "gem" | "caught" | "won" | "lure";
 
 export interface Particle {
   x: number;
@@ -81,19 +88,19 @@ export interface Ring {
 export type Phase = "playing" | "lost" | "won";
 
 export const WIN_AT = 8;
-/** How many cats belong at a given count: the first after one piece of cheese,
+/** How many drones belong at a given count: the first after one piece of cheese,
     then another every second piece after that. */
-export function catsDue(score: number): number {
+export function dronesDue(score: number): number {
   return score < 1 ? 0 : Math.min(DELAYS.length, 1 + Math.floor((score - 1) / 2));
 }
 
 export const PLAYER_HIT = 0.02;
-export const CAT_HIT = 0.02;
-export const STAR_HIT = 0.032;
+export const DRONE_HIT = 0.02;
+export const GEM_HIT = 0.032;
 
 /** Drawn a little larger than they catch, so a near miss reads as a near miss. */
 export const PLAYER_DRAW = 0.027;
-export const CAT_DRAW = 0.027;
+export const DRONE_DRAW = 0.027;
 
 /** How far behind each one reads the trail. The first hangs well back: it is
     the one that has to be understood rather than survived. */
@@ -106,7 +113,7 @@ export const SAFE_WAKE = 0.17;
 
 /** A mouse runs; it does not teleport. Chasing the cursor at a fixed pace is
     what gives distance a cost and dodging a technique --- glued to the pointer,
-    any cat can be escaped by flicking the wrist, and the round is over in
+    any drone can be escaped by flicking the wrist, and the round is over in
     seconds because crossing the room is free. */
 const RUN = 0.42;
 /** Eases to a stop inside this, so it settles instead of jittering. */
@@ -116,26 +123,26 @@ const TRAIL_KEEP_MS = 2600;
 const MAX_PARTICLES = 180;
 const MAX_RINGS = 12;
 
-const STAR_MARGIN = 0.13;
-const STAR_MIN_FROM_PLAYER = 0.34;
-const STAR_MAX_FROM_PLAYER = 0.95;
-const STAR_MIN_FROM_SHADE = 0.17;
+const GEM_MARGIN = 0.13;
+const GEM_MIN_FROM_PLAYER = 0.34;
+const GEM_MAX_FROM_PLAYER = 0.95;
+const GEM_MIN_FROM_DRONE = 0.17;
 
 export interface Game {
   phase: Phase;
   /** Which way the comet points. Radians. */
   heading: number;
-  /** Milliseconds left of the trail lighting up after a star. */
+  /** Milliseconds left of the trail lighting up after a gem. */
   flash: number;
-  /** Seconds until the star throws another thread towards the player. */
+  /** Seconds until the gem throws another thread towards the player. */
   lureIn: number;
-  /** Seconds of play. Pausing stops this, so the cats stay in step. */
+  /** Seconds of play. Pausing stops this, so the drones stay in step. */
   elapsed: number;
   player: Vec;
   target: Vec;
   trail: TrailPoint[];
-  cats: Cat[];
-  star: Star | null;
+  drones: Drone[];
+  gem: Gem | null;
   score: number;
   particles: Particle[];
   rings: Ring[];
@@ -161,25 +168,27 @@ function random(seed: number): [number, number] {
   return [s / 0x100000000, s];
 }
 
-/** Where a cat is on screen, through all four stages of arriving. */
-export function catAt(g: Game, cat: Cat): Vec | null {
-  if (cat.state === "sleeping" || cat.state === "waking") return cat.from;
+/** Where a drone is on screen, through all four stages of arriving. */
+export function droneAt(g: Game, drone: Drone): Vec | null {
+  if (drone.state === "docked" || drone.state === "booting") {
+    return slotAt(g.world, drone.slot, DELAYS.length);
+  }
 
   // Where the prints it was sent for begin. It walks to that spot and waits
   // over it; by the time it looks up, the trail has caught up to the same
   // place, so following starts without a jump.
-  const start = sample(g.trail, cat.anchor) ?? cat.from;
+  const start = sample(g.trail, drone.anchor) ?? drone.from;
 
-  if (cat.state === "leaving") {
-    const t = Math.min(1, cat.stateFor / stageLength(cat, "leaving"));
+  if (drone.state === "leaving") {
+    const t = Math.min(1, drone.stateFor / stageLength(drone, "leaving"));
     const eased = t * t * (3 - 2 * t);
     return {
-      x: cat.from.x + (start.x - cat.from.x) * eased,
-      y: cat.from.y + (start.y - cat.from.y) * eased,
+      x: drone.from.x + (start.x - drone.from.x) * eased,
+      y: drone.from.y + (start.y - drone.from.y) * eased,
     };
   }
-  if (cat.state === "sniffing") return start;
-  return sample(g.trail, g.elapsed - cat.delay) ?? start;
+  if (drone.state === "locking") return start;
+  return sample(g.trail, g.elapsed - drone.delay) ?? start;
 }
 
 /** The trail, read at a moment in time. Null before the trail reaches back. */
@@ -207,19 +216,20 @@ export function initial(world: Vec = { x: 1.6, y: 1 }, seed = 1): Game {
     player: { ...player },
     target: { ...player },
     trail: [{ x: player.x, y: player.y, t: 0 }],
-    // All of them, asleep in the bed. Visible from the first frame, which is
+    // All of them, asleep in the bay. Visible from the first frame, which is
     // its own kind of warning, and harmless until something wakes one.
-    cats: DELAYS.map((delay, i) => ({
+    drones: DELAYS.map((delay, i) => ({
       id: 10 + i,
       delay,
-      state: "sleeping" as CatState,
+      state: "docked" as DroneState,
       stateFor: i * 0.7,
       anchor: 0,
-      from: bedAt(world),
+      slot: i,
+      from: bayAt(world),
       live: false,
     })),
     // Close enough that it is taken almost by accident, which is the lesson.
-    star: { x: player.x + 0.19, y: player.y - 0.1, born: 0 },
+    gem: { x: player.x + 0.19, y: player.y - 0.1, born: 0 },
     score: 0,
     particles: [],
     rings: [],
@@ -231,9 +241,9 @@ export function initial(world: Vec = { x: 1.6, y: 1 }, seed = 1): Game {
   };
 }
 
-function placeStar(g: Game, cats: Vec[]): [Star, number] {
+function placeGem(g: Game, drones: Vec[]): [Gem, number] {
   let seed = g.seed;
-  let best: Star | null = null;
+  let best: Gem | null = null;
   let bestScore = -1;
 
   for (let attempt = 0; attempt < 40; attempt++) {
@@ -241,16 +251,16 @@ function placeStar(g: Game, cats: Vec[]): [Star, number] {
     const [ry, s2] = random(s1);
     seed = s2;
 
-    const x = STAR_MARGIN + rx * (g.world.x - STAR_MARGIN * 2);
-    const y = STAR_MARGIN + ry * (g.world.y - STAR_MARGIN * 2);
+    const x = GEM_MARGIN + rx * (g.world.x - GEM_MARGIN * 2);
+    const y = GEM_MARGIN + ry * (g.world.y - GEM_MARGIN * 2);
     const here = { x, y };
 
     const fromPlayer = Math.hypot(x - g.player.x, y - g.player.y);
-    if (fromPlayer < STAR_MIN_FROM_PLAYER || fromPlayer > STAR_MAX_FROM_PLAYER) continue;
+    if (fromPlayer < GEM_MIN_FROM_PLAYER || fromPlayer > GEM_MAX_FROM_PLAYER) continue;
 
-    let nearestShade = Infinity;
-    for (const s of cats) nearestShade = Math.min(nearestShade, Math.hypot(x - s.x, y - s.y));
-    if (nearestShade < STAR_MIN_FROM_SHADE) continue;
+    let nearestDrone = Infinity;
+    for (const s of drones) nearestDrone = Math.min(nearestDrone, Math.hypot(x - s.x, y - s.y));
+    if (nearestDrone < GEM_MIN_FROM_DRONE) continue;
 
     // The first spot that clears the guards, not the safest one on the board.
     // Preferring the safest quietly routed every trip around the danger, which
@@ -265,8 +275,8 @@ function placeStar(g: Game, cats: Vec[]): [Star, number] {
     const [ry, s2] = random(s1);
     seed = s2;
     best = {
-      x: STAR_MARGIN + rx * (g.world.x - STAR_MARGIN * 2),
-      y: STAR_MARGIN + ry * (g.world.y - STAR_MARGIN * 2),
+      x: GEM_MARGIN + rx * (g.world.x - GEM_MARGIN * 2),
+      y: GEM_MARGIN + ry * (g.world.y - GEM_MARGIN * 2),
       born: g.elapsed,
     };
   }
@@ -310,12 +320,12 @@ export function step(g: Game, input: Input, dtMs: number): Game {
   const dt = dtMs / 1000;
   const next: Game = {
     ...g,
-    star: g.star ? { ...g.star } : null,
+    gem: g.gem ? { ...g.gem } : null,
     player: { ...g.player },
     target: { ...g.target },
     world: input.world ? { ...input.world } : { ...g.world },
     trail: g.trail,
-    cats: g.cats,
+    drones: g.drones,
     particles: g.particles.map((p) => ({ ...p })),
     rings: g.rings.map((r) => ({ ...r })),
   };
@@ -366,40 +376,40 @@ export function step(g: Game, input: Input, dtMs: number): Game {
   while (drop + 1 < trail.length && trail[drop + 1].t < cutoff) drop++;
   next.trail = drop > 0 ? trail.slice(drop) : trail;
 
-  const here = next.cats
-    .map((s) => catAt(next, s))
+  const here = next.drones
+    .map((s) => droneAt(next, s))
     .filter((p): p is Vec => p !== null);
 
-  // Each cat walks its arrival forward. Nothing before "tracking" can touch
-  // anyone, and tracking itself waits until the cat is clear of the player: a
-  // cat reads the prints exactly, so the spot it is on is a spot the player
+  // Each drone walks its arrival forward. Nothing before "hunting" can touch
+  // anyone, and hunting itself waits until the drone is clear of the player: a
+  // drone reads the prints exactly, so the spot it is on is a spot the player
   // stood in, and pausing after cheese is the most natural thing anyone does.
-  next.cats = next.cats.map((cat, i) => {
-    const stateFor = cat.stateFor + dt;
+  next.drones = next.drones.map((drone, i) => {
+    const stateFor = drone.stateFor + dt;
     // Asleep is not a stage that times out --- only cheese ends it.
-    if (cat.state === "sleeping") return { ...cat, stateFor };
-    const onward: Record<string, CatState> = {
-      waking: "leaving",
-      leaving: "sniffing",
-      sniffing: "tracking",
+    if (drone.state === "docked") return { ...drone, stateFor };
+    const onward: Record<string, DroneState> = {
+      booting: "leaving",
+      leaving: "locking",
+      locking: "hunting",
     };
-    if (cat.state !== "tracking") {
-      return stateFor < stageLength(cat, cat.state)
-        ? { ...cat, stateFor }
-        : { ...cat, state: onward[cat.state], stateFor: 0 };
+    if (drone.state !== "hunting") {
+      return stateFor < stageLength(drone, drone.state)
+        ? { ...drone, stateFor }
+        : { ...drone, state: onward[drone.state], stateFor: 0 };
     }
-    if (cat.live) return { ...cat, stateFor };
+    if (drone.live) return { ...drone, stateFor };
     const at = here[i];
-    if (!at) return { ...cat, stateFor };
+    if (!at) return { ...drone, stateFor };
     const gap = Math.hypot(at.x - next.player.x, at.y - next.player.y);
-    return gap < SAFE_WAKE ? { ...cat, stateFor } : { ...cat, stateFor, live: true };
+    return gap < SAFE_WAKE ? { ...drone, stateFor } : { ...drone, stateFor, live: true };
   });
 
   // Caught by where you have already been.
-  for (const [i, cat] of next.cats.entries()) {
+  for (const [i, drone] of next.drones.entries()) {
     const at = here[i];
-    if (!at || !cat.live) continue;
-    if (overlaps(next.player, PLAYER_HIT, at, CAT_HIT)) {
+    if (!at || !drone.live) continue;
+    if (overlaps(next.player, PLAYER_HIT, at, DRONE_HIT)) {
       next.phase = "lost";
       next.endedAt = next.elapsed;
       burst(next, next.player, "caught", 26);
@@ -408,26 +418,26 @@ export function step(g: Game, input: Input, dtMs: number): Game {
     }
   }
 
-  if (next.star) {
-    // The star leans towards whoever is close, and keeps throwing threads of
+  if (next.gem) {
+    // The gem leans towards whoever is close, and keeps throwing threads of
     // itself their way. Nothing here says "collect me"; it just behaves like
     // something that wants to be reached.
-    const reach = Math.hypot(next.player.x - next.star.x, next.player.y - next.star.y);
+    const reach = Math.hypot(next.player.x - next.gem.x, next.player.y - next.gem.y);
     if (reach < 0.24 && reach > 0.001) {
       const pull = (1 - reach / 0.24) * 1.1 * dt;
-      next.star.x += (next.player.x - next.star.x) * pull;
-      next.star.y += (next.player.y - next.star.y) * pull;
+      next.gem.x += (next.player.x - next.gem.x) * pull;
+      next.gem.y += (next.player.y - next.gem.y) * pull;
     }
 
     next.lureIn -= dt;
     if (next.lureIn <= 0) {
       next.lureIn = 0.22;
-      const away = Math.atan2(next.player.y - next.star.y, next.player.x - next.star.x);
+      const away = Math.atan2(next.player.y - next.gem.y, next.player.x - next.gem.x);
       next.particles = [
         ...next.particles,
         {
-          x: next.star.x,
-          y: next.star.y,
+          x: next.gem.x,
+          y: next.gem.y,
           vx: Math.cos(away) * 0.2,
           vy: Math.sin(away) * 0.2,
           life: 700,
@@ -441,9 +451,9 @@ export function step(g: Game, input: Input, dtMs: number): Game {
     }
   }
 
-  if (next.star && overlaps(next.player, PLAYER_HIT, next.star, STAR_HIT)) {
+  if (next.gem && overlaps(next.player, PLAYER_HIT, next.gem, GEM_HIT)) {
     // The first one is the whole lesson, so it lands twice as hard.
-    burst(next, next.star, "star", g.score === 0 ? 30 : 16);
+    burst(next, next.gem, "gem", g.score === 0 ? 30 : 16);
     next.score = g.score + 1;
     // And the route lights up, a beat before something starts walking it.
     next.flash = g.score === 0 ? 1400 : 850;
@@ -452,24 +462,24 @@ export function step(g: Game, input: Input, dtMs: number): Game {
     if (next.score >= WIN_AT) {
       next.phase = "won";
       next.endedAt = next.elapsed;
-      next.star = null;
+      next.gem = null;
       burst(next, next.player, "won", 40);
       return next;
     }
 
     // The noise wakes one of them. Nothing is created; something opens an eye.
-    const awake = next.cats.filter((c) => c.state !== "sleeping").length;
-    if (awake < catsDue(next.score)) {
+    const awake = next.drones.filter((c) => c.state !== "docked").length;
+    if (awake < dronesDue(next.score)) {
       let woken = false;
-      next.cats = next.cats.map((c) => {
-        if (woken || c.state !== "sleeping") return c;
+      next.drones = next.drones.map((c) => {
+        if (woken || c.state !== "docked") return c;
         woken = true;
-        return { ...c, state: "waking" as CatState, stateFor: 0, anchor: next.elapsed };
+        return { ...c, state: "booting" as DroneState, stateFor: 0, anchor: next.elapsed };
       });
     }
 
-    const [star, seed] = placeStar(next, here);
-    next.star = star;
+    const [gem, seed] = placeGem(next, here);
+    next.gem = gem;
     next.seed = seed;
   }
 

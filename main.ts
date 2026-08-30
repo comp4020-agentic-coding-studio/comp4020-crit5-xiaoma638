@@ -53,7 +53,7 @@ function paint(force: boolean): void {
     ending.hidden = phase === "playing";
     // Short enough to read at a glance, and it says how it went, not how to play.
     verdict.textContent =
-      phase === "won" ? "Home free" : phase === "lost" ? "Caught by the past" : "";
+      phase === "won" ? "Out clean" : phase === "lost" ? "Caught by the past" : "";
     if (phase !== "playing") again.focus();
   }
 }
@@ -92,7 +92,7 @@ new ResizeObserver(() => {
   const changed = next.x !== world.x || next.y !== world.y;
   world = next;
   // The board's real size can arrive after this module runs, and the opening
-  // is placed from it --- the player in the middle, the first star an easy
+  // is placed from it --- the player in the middle, the first gem an easy
   // reach away. Re-place the round while it is still the opening rather than
   // leave someone starting off-centre from a size that was never true.
   if (changed && game.elapsed < 0.4 && game.score === 0 && game.phase === "playing") {
@@ -104,7 +104,7 @@ new ResizeObserver(() => {
   draw(game, calm.matches);
 }).observe(board);
 
-// Away is paused: the cats are one clock behind you, and a tab that keeps
+// Away is paused: the drones are one clock behind you, and a tab that keeps
 // running while nobody is watching would hand them the round.
 function setRunning(on: boolean): void {
   running = on;
