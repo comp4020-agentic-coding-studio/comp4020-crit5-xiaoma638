@@ -2,7 +2,15 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
-import { aim, initial, PER_BREAK, SEALS, SQUAD_START, SURGE, step, type Game, type Input } from "../logic.ts";
+import {
+  initial,
+  overlaps,
+  PLAYER_HIT,
+  SHADE_HIT,
+  step,
+  WIN_AT,
+  type Game,
+} from "../logic.ts";
 
 // The mechanically checkable lines of this week's published spec.
 //
@@ -79,139 +87,94 @@ describe("spec: it teaches itself", () => {
   });
 });
 
-// The one rule of this game put under a focused test, as the spec asks. The
-// squad fires on its own; all you decide is where that fire points, so the
-// cost of going for a crystal is a stretch of time with nothing shooting at
-// what's walking in. This is what that spend buys.
+// The one rule this game turns on, put under a focused test as the spec asks:
+// a shade is where you were, and touching one ends the round. It is a pure
+// function of two circles, so it can be checked exactly --- including the
+// graze, where the call between "caught" and "just made it" actually lives.
 //
-// It runs on the pure state machine --- no DOM, no clock --- so it stays true
-// while the look of the thing changes underneath it.
+// All of this runs on the machine, not the canvas, so it stays true while the
+// look of the thing changes underneath it.
 
-function atCrystal(hp: number, over: Partial<Game> = {}): Game {
-  const g = initial(3);
+const HERE = { x: 0.5, y: 0.5 };
+const REACH = PLAYER_HIT + SHADE_HIT;
+
+describe("spec: a shade catches you", () => {
+  it("catches when the two circles overlap", () => {
+    const onTop = { x: HERE.x + REACH * 0.5, y: HERE.y };
+
+    expect(overlaps(HERE, PLAYER_HIT, onTop, SHADE_HIT)).toBe(true);
+  });
+
+  it("does not catch when they are clear of each other", () => {
+    const away = { x: HERE.x + REACH * 3, y: HERE.y };
+
+    expect(overlaps(HERE, PLAYER_HIT, away, SHADE_HIT)).toBe(false);
+  });
+
+  it("reads an exact graze as a miss", () => {
+    const grazing = { x: HERE.x + REACH, y: HERE.y };
+
+    expect(
+      overlaps(HERE, PLAYER_HIT, grazing, SHADE_HIT),
+      "touching at exactly the sum of the radii is the near miss that makes a fast pass feel fair",
+    ).toBe(false);
+  });
+
+  it("still misses a hair outside, and catches a hair inside", () => {
+    const outside = { x: HERE.x + REACH * 1.001, y: HERE.y };
+    const inside = { x: HERE.x + REACH * 0.999, y: HERE.y };
+
+    expect(overlaps(HERE, PLAYER_HIT, outside, SHADE_HIT)).toBe(false);
+    expect(overlaps(HERE, PLAYER_HIT, inside, SHADE_HIT)).toBe(true);
+  });
+});
+
+/** A round already under way, with the trail parked on one spot. */
+function standing(over: Partial<Game> = {}): Game {
   return {
-    ...g,
-    foes: [],
-    seal: { id: 99, index: 0, hp, maxHp: SEALS[0], hurt: 0 },
-    focus: { kind: "seal" },
-    // One round already in flight, a hair short of the crystal.
-    bullets: [{ id: 50, d: 0.5, target: { kind: "seal" } }],
+    ...initial(),
+    elapsed: 5,
+    player: { ...HERE },
+    target: { ...HERE },
+    trail: [
+      { x: HERE.x, y: HERE.y, t: 2.5 },
+      { x: HERE.x, y: HERE.y, t: 5 },
+    ],
+    star: null,
     ...over,
   };
 }
 
-describe("spec: breaking a crystal is what frees someone", () => {
-  it("frees one of you on the hit that empties it, and raises the next", () => {
-    const before = atCrystal(1);
-    const after = step(before, null, 100);
+describe("spec: the round ends where it should", () => {
+  it("is lost the moment an armed shade reaches the player", () => {
+    const g = standing({ shades: [{ id: 1, delay: 1.2, armedAt: 0 }] });
 
-    expect(after.allies.length, "a broken crystal is the only thing that grows the squad").toBe(
-      before.allies.length + PER_BREAK,
-    );
-    expect(after.broken).toBe(1);
-    expect(after.seal?.id, "that crystal is gone --- what stands there now is the next").not.toBe(
-      before.seal?.id,
-    );
+    const after = step(g, { target: HERE }, 16);
+
+    expect(after.phase, "standing where you stood is what loses this game").toBe("lost");
   });
 
-  it("holds while it still has points, and the squad stays the size it was", () => {
-    const before = atCrystal(2);
-    const after = step(before, null, 100);
+  it("does not lose to one that has not armed yet", () => {
+    const g = standing({ shades: [{ id: 1, delay: 1.2, armedAt: 60 }] });
 
-    expect(after.seal?.hp).toBe(1);
-    expect(after.allies.length, "the squad grows on the break, not on the hit").toBe(
-      before.allies.length,
-    );
+    const after = step(g, { target: HERE }, 16);
+
+    expect(
+      after.phase,
+      "a shade fades up before it can catch you, so nothing arrives without warning",
+    ).toBe("playing");
   });
 
-  it("leaves the lane bare once the last crystal falls, and calls the surge", () => {
-    const last = SEALS.length - 1;
-    const after = step(
-      atCrystal(1, {
-        broken: last,
-        seal: { id: 99, index: last, hp: 1, maxHp: SEALS[last], hurt: 0 },
-      }),
-      null,
-      100,
-    );
-
-    expect(after.seal, "nothing else rises --- the round has somewhere to end").toBeNull();
-    expect(after.surgeLeft, "the last break is what starts the ending").toBe(SURGE);
-  });
-});
-
-describe("spec: your one input is where the squad points", () => {
-  it("shoots the nearest shade when you have said nothing", () => {
-    const g: Game = {
-      ...initial(3),
-      foes: [
-        { id: 10, d: 0.8, speed: 0.07, hp: 2, maxHp: 2, hurt: 0 },
-        { id: 11, d: 0.3, speed: 0.07, hp: 2, maxHp: 2, hurt: 0 },
-      ],
-      seal: { id: 99, index: 0, hp: 5, maxHp: SEALS[0], hurt: 0 },
-    };
-
-    expect(aim(g), "an untouched game still defends itself").toEqual({ kind: "foe", id: 11 });
-  });
-
-  it("holds the crystal once you pick it, with shades still closing", () => {
-    const g: Game = {
-      ...initial(3),
-      foes: [{ id: 11, d: 0.3, speed: 0.07, hp: 2, maxHp: 2, hurt: 0 }],
-      seal: { id: 99, index: 0, hp: 5, maxHp: SEALS[0], hurt: 0 },
-    };
-
-    const after = step(g, { kind: "seal" }, 16);
-    expect(aim(after), "that is the whole trade --- fire spent here is fire not spent there").toEqual(
-      { kind: "seal" },
-    );
-  });
-
-  it("falls back to the lane when what you picked is gone", () => {
-    const g: Game = {
-      ...initial(3),
-      foes: [{ id: 11, d: 0.3, speed: 0.07, hp: 2, maxHp: 2, hurt: 0 }],
-      focus: { kind: "foe", id: 404 },
-    };
-
-    expect(aim(g), "a squad aimed at nothing would just watch").toEqual({ kind: "foe", id: 11 });
-  });
-});
-
-// The rest of the spec's first line is a claim about a whole round rather than
-// one transition, so these play it out: a round has to be losable, and it has
-// to end somewhere.
-
-const FRAME = 16;
-
-function play(choose: (g: Game) => Input, limitMs = 300_000): Game {
-  let g = initial(7);
-  for (let t = 0; t < limitMs; t += FRAME) {
-    if (g.phase !== "playing") break;
-    g = step(g, choose(g), FRAME);
-  }
-  return g;
-}
-
-describe("spec: a round ends somewhere", () => {
-  it("is lost by holding the crystal while the lane fills --- a wrong move is possible", () => {
-    const g = play((state) => (state.seal ? { kind: "seal" } : null));
-
-    expect(g.phase, "fire spent on the crystal is fire not spent on the lane").toBe("lost");
-  });
-
-  it("is winnable: hold the lane, take the crystals in the gaps, see off the surge", () => {
-    const g = play((state) => {
-      const nearest = [...state.foes].sort((a, b) => a.d - b.d)[0];
-      // Go for the crystal only while nothing is close enough to matter.
-      if (nearest && nearest.d < 0.5) return { kind: "foe", id: nearest.id };
-      return state.seal ? { kind: "seal" } : null;
+  it("reaches the present on the eighth star", () => {
+    const g = standing({
+      score: WIN_AT - 1,
+      shades: [],
+      star: { x: HERE.x, y: HERE.y, born: 0 },
     });
 
-    expect(g.phase, "a game you cannot finish has no ending to reach").toBe("won");
-    expect(g.broken).toBe(SEALS.length);
-    expect(g.allies.length, "every crystal is two more of you").toBe(
-      SQUAD_START + SEALS.length * PER_BREAK,
-    );
+    const after = step(g, { target: HERE }, 16);
+
+    expect(after.phase, "a game you cannot finish has no ending to reach").toBe("won");
+    expect(after.score).toBe(WIN_AT);
   });
 });

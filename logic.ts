@@ -1,305 +1,330 @@
-// The whole game as a pure state machine: no DOM, no timers, no ambient
-// randomness. `step` is the only thing that advances time, and it takes the
-// elapsed milliseconds as an argument, so a test can play a whole round in a
-// loop without waiting for one. The seed travels in the state rather than in a
-// closure, so stepping the same state twice gives the same answer twice.
+// The whole game as data plus one pure step. No DOM, no timers, no ambient
+// randomness: `step` takes the elapsed milliseconds, and the seed travels in
+// the state, so a test can play a round in a loop and get the same round twice.
 //
-// Everything on the lane carries one number, `d` --- 0 at the line your squad
-// holds, 1 at the far end shades walk in from. Nothing in here knows whether
-// that lane runs across the screen or down it; render.ts decides that, which
-// is how the desktop and phone viewports share this file untouched.
-//
-// The squad fires on its own. The player's whole input is where that fire
-// points, so the cost of going for the crystal is a stretch of time with
-// nothing shooting at what's walking in.
+// Space is measured in short-side units: 1.0 is the shorter edge of the board,
+// whichever that is. Every radius and speed below is written in those units, so
+// a phone and a monitor get the same game rather than the same pixels.
 
-export type Phase = "playing" | "won" | "lost";
-
-export type Target = { kind: "foe"; id: number } | { kind: "seal" };
-/** Null means the squad falls back to whatever is closest. */
-export type Focus = Target | null;
-export type Input = Focus;
-
-/** Hits to break each crystal, in the order they rise. */
-export const SEALS = [36, 70, 110] as const;
-
-/** Where the squad starts. */
-export const SQUAD_START = 2;
-
-/** How many a break frees. Two, because the jump has to be seen, not counted. */
-export const PER_BREAK = 2;
-
-/** Ceilings decided before the loop, not after a slow frame. */
-export const MAX_FOES = 14;
-export const MAX_BULLETS = 40;
-export const MAX_SHARDS = 24;
-
-/** Shades to see off once the last crystal breaks. */
-export const SURGE = 12;
-
-export const SEAL_D = 0.52;
-
-/** Seconds of lane a bullet covers per second. */
-const BULLET_SPEED = 1.05;
-const FIRE_MS = 470;
-const HURT_MS = 110;
-export const SHARD_MS = 620;
-
-const GAP_FROM = 2600;
-const GAP_TO = 900;
-const GAP_EASE_MS = 80_000;
-
-type Kind = { speed: number; hp: number };
-
-const KINDS: Kind[] = [
-  { speed: 0.072, hp: 6 },
-  { speed: 0.105, hp: 6 },
-  { speed: 0.048, hp: 14 },
-];
-
-export interface Ally {
-  id: number;
-  slot: number;
-  cooldown: number;
+export interface Vec {
+  x: number;
+  y: number;
 }
 
-export interface Foe {
-  id: number;
-  d: number;
-  speed: number;
-  hp: number;
-  maxHp: number;
-  hurt: number;
+export interface TrailPoint {
+  x: number;
+  y: number;
+  t: number;
 }
 
-export interface Seal {
+export interface Shade {
   id: number;
-  index: number;
-  hp: number;
-  maxHp: number;
-  hurt: number;
+  /** Seconds it walks behind you. */
+  delay: number;
+  /** Elapsed seconds after which it can catch you. */
+  armedAt: number;
 }
 
-export interface Bullet {
-  id: number;
-  d: number;
-  target: Target;
+export interface Star {
+  x: number;
+  y: number;
+  born: number;
 }
 
-export interface Shard {
-  id: number;
+export type Spark = "star" | "caught" | "won";
+
+export interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
   life: number;
+  max: number;
+  kind: Spark;
 }
+
+export interface Ring {
+  x: number;
+  y: number;
+  life: number;
+  max: number;
+  kind: Spark;
+}
+
+export type Phase = "playing" | "lost" | "won";
+
+export const WIN_AT = 8;
+/** One more of them for every two you take. */
+export const STAR_PER_SHADE = 2;
+
+export const PLAYER_HIT = 0.02;
+export const SHADE_HIT = 0.02;
+export const STAR_HIT = 0.032;
+
+/** Drawn a little larger than they catch, so a near miss reads as a near miss. */
+export const PLAYER_DRAW = 0.027;
+export const SHADE_DRAW = 0.027;
+
+/** How far behind each one runs. Slightly different, so they fan out. */
+export const DELAYS = [1.2, 1.65, 1.0, 1.85] as const;
+
+/** A new shade is visible but harmless for this long. */
+const ARM_MS = 900;
+const FIRST_ARM_MS = 600;
+
+/** Exponential follow: firm, but not glued to the cursor. */
+const FOLLOW = 13;
+
+const TRAIL_KEEP_MS = 2600;
+const MAX_PARTICLES = 180;
+const MAX_RINGS = 12;
+
+const STAR_MARGIN = 0.13;
+const STAR_MIN_FROM_PLAYER = 0.26;
+const STAR_MAX_FROM_PLAYER = 0.78;
+const STAR_MIN_FROM_SHADE = 0.17;
 
 export interface Game {
   phase: Phase;
-  /** True once the first shade is down --- what lets the first crystal rise. */
-  opened: boolean;
-  allies: Ally[];
-  foes: Foe[];
-  bullets: Bullet[];
-  seal: Seal | null;
-  broken: number;
-  focus: Focus;
-  shards: Shard[];
-  spawnTimer: number;
-  surgeLeft: number;
+  /** Seconds of play. Pausing stops this, so the shades stay in step. */
   elapsed: number;
+  player: Vec;
+  target: Vec;
+  trail: TrailPoint[];
+  shades: Shade[];
+  star: Star | null;
+  score: number;
+  particles: Particle[];
+  rings: Ring[];
+  shake: number;
+  endedAt: number;
+  world: Vec;
   nextId: number;
   seed: number;
 }
 
-function nextRandom(seed: number): [number, number] {
+/** The rule the whole game turns on, on its own so it can be tested alone. */
+export function overlaps(a: Vec, ar: number, b: Vec, br: number): boolean {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const reach = ar + br;
+  // Strictly inside: grazing at exactly the sum of the radii is a near miss,
+  // which is the call that makes a fast pass feel fair rather than cheap.
+  return dx * dx + dy * dy < reach * reach;
+}
+
+function random(seed: number): [number, number] {
   const s = (seed * 1664525 + 1013904223) >>> 0;
   return [s / 0x100000000, s];
 }
 
-export function initial(seed = 1): Game {
+/** Where a shade is right now: where you were, `delay` seconds ago. */
+export function shadeAt(g: Game, shade: Shade): Vec | null {
+  return sample(g.trail, g.elapsed - shade.delay);
+}
+
+/** The trail, read at a moment in time. Null before the trail reaches back. */
+export function sample(trail: TrailPoint[], t: number): Vec | null {
+  if (trail.length === 0 || t < trail[0].t) return null;
+  for (let i = trail.length - 1; i >= 0; i--) {
+    const a = trail[i];
+    if (a.t > t) continue;
+    const b = trail[i + 1];
+    if (!b || b.t === a.t) return { x: a.x, y: a.y };
+    const f = (t - a.t) / (b.t - a.t);
+    return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
+  }
+  return null;
+}
+
+export function initial(world: Vec = { x: 1.6, y: 1 }, seed = 1): Game {
+  const player = { x: world.x / 2, y: world.y / 2 };
   return {
     phase: "playing",
-    opened: false,
-    allies: Array.from({ length: SQUAD_START }, (_, i) => ({
-      id: 1000 + i,
-      slot: i,
-      // Staggered, so the squad reads as several people rather than one gun.
-      cooldown: FIRE_MS * (0.3 + i * 0.25),
-    })),
-    // One shade, walking in slowly and alone: the squad shoots at it without
-    // being asked, which is the whole lesson.
-    foes: [{ id: 2, d: 1, speed: 0.05, hp: 5, maxHp: 5, hurt: 0 }],
-    bullets: [],
-    seal: null,
-    broken: 0,
-    focus: null,
-    shards: [],
-    spawnTimer: GAP_FROM,
-    surgeLeft: -1,
     elapsed: 0,
-    nextId: 3,
+    player: { ...player },
+    target: { ...player },
+    trail: [{ x: player.x, y: player.y, t: 0 }],
+    // One from the start. It cannot reach you until the trail is long enough,
+    // which is the pause that lets the first star be taken in peace.
+    shades: [{ id: 1, delay: DELAYS[0], armedAt: DELAYS[0] + FIRST_ARM_MS / 1000 }],
+    // Close enough that it is taken almost by accident, which is the lesson.
+    star: { x: player.x + 0.19, y: player.y - 0.1, born: 0 },
+    score: 0,
+    particles: [],
+    rings: [],
+    shake: 0,
+    endedAt: 0,
+    world: { ...world },
+    nextId: 2,
     seed,
   };
 }
 
-function raise(index: number, id: number): Seal {
-  return { id, index, hp: SEALS[index], maxHp: SEALS[index], hurt: 0 };
+function placeStar(g: Game, shades: Vec[]): [Star, number] {
+  let seed = g.seed;
+  let best: Star | null = null;
+  let bestScore = -1;
+
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const [rx, s1] = random(seed);
+    const [ry, s2] = random(s1);
+    seed = s2;
+
+    const x = STAR_MARGIN + rx * (g.world.x - STAR_MARGIN * 2);
+    const y = STAR_MARGIN + ry * (g.world.y - STAR_MARGIN * 2);
+    const here = { x, y };
+
+    const fromPlayer = Math.hypot(x - g.player.x, y - g.player.y);
+    if (fromPlayer < STAR_MIN_FROM_PLAYER || fromPlayer > STAR_MAX_FROM_PLAYER) continue;
+
+    let nearestShade = Infinity;
+    for (const s of shades) nearestShade = Math.min(nearestShade, Math.hypot(x - s.x, y - s.y));
+    if (nearestShade < STAR_MIN_FROM_SHADE) continue;
+
+    // Among the legal spots, prefer the one standing clearest of the shades:
+    // reachable is not enough, it has to be worth crossing to.
+    const score = Math.min(nearestShade, 1.2);
+    if (score > bestScore) {
+      bestScore = score;
+      best = { x, y, born: g.elapsed };
+    }
+  }
+
+  if (!best) {
+    const [rx, s1] = random(seed);
+    const [ry, s2] = random(s1);
+    seed = s2;
+    best = {
+      x: STAR_MARGIN + rx * (g.world.x - STAR_MARGIN * 2),
+      y: STAR_MARGIN + ry * (g.world.y - STAR_MARGIN * 2),
+      born: g.elapsed,
+    };
+  }
+  return [best, seed];
 }
 
-function capped<T>(list: T[], ceiling: number): T[] {
-  return list.length > ceiling ? list.slice(list.length - ceiling) : list;
+function burst(g: Game, at: Vec, kind: Spark, count: number): void {
+  let seed = g.seed;
+  for (let i = 0; i < count; i++) {
+    const [ra, s1] = random(seed);
+    const [rs, s2] = random(s1);
+    seed = s2;
+    const angle = ra * Math.PI * 2;
+    const speed = (0.18 + rs * 0.5) * (kind === "won" ? 1.4 : 1);
+    g.particles.push({
+      x: at.x,
+      y: at.y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: kind === "won" ? 1500 : 620,
+      max: kind === "won" ? 1500 : 620,
+      kind,
+    });
+  }
+  if (g.particles.length > MAX_PARTICLES) {
+    g.particles.splice(0, g.particles.length - MAX_PARTICLES);
+  }
+  g.rings.push({ x: at.x, y: at.y, life: 480, max: 480, kind });
+  if (g.rings.length > MAX_RINGS) g.rings.splice(0, g.rings.length - MAX_RINGS);
+  g.seed = seed;
 }
 
-/** Where a target sits right now, or null if it is already gone. */
-function targetD(g: Game, t: Target): number | null {
-  if (t.kind === "seal") return g.seal ? SEAL_D : null;
-  return g.foes.find((f) => f.id === t.id)?.d ?? null;
-}
-
-/** What the squad is actually shooting at: your call, else what's closest. */
-export function aim(g: Game): Target | null {
-  if (g.focus && targetD(g, g.focus) !== null) return g.focus;
-  let nearest: Foe | null = null;
-  for (const f of g.foes) if (!nearest || f.d < nearest.d) nearest = f;
-  return nearest ? { kind: "foe", id: nearest.id } : null;
+export interface Input {
+  /** Where the pointer or the keys want the player to be. */
+  target?: Vec;
+  /** Board shape, in short-side units. */
+  world?: Vec;
 }
 
 export function step(g: Game, input: Input, dtMs: number): Game {
   const dt = dtMs / 1000;
-  let {
-    phase,
-    opened,
-    allies,
-    foes,
-    bullets,
-    seal,
-    broken,
-    focus,
-    shards,
-    spawnTimer,
-    surgeLeft,
-    nextId,
-    seed,
-  } = g;
+  const next: Game = {
+    ...g,
+    player: { ...g.player },
+    target: { ...g.target },
+    world: input.world ? { ...input.world } : { ...g.world },
+    trail: g.trail,
+    shades: g.shades,
+    particles: g.particles.map((p) => ({ ...p })),
+    rings: g.rings.map((r) => ({ ...r })),
+  };
 
-  if (phase !== "playing") {
-    return { ...g, elapsed: g.elapsed + dtMs };
+  // Effects keep running after the round is over --- that is the ending.
+  for (const p of next.particles) {
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vx *= 1 - Math.min(1, 2.2 * dt);
+    p.vy *= 1 - Math.min(1, 2.2 * dt);
+    p.life -= dtMs;
   }
+  next.particles = next.particles.filter((p) => p.life > 0);
+  for (const r of next.rings) r.life -= dtMs;
+  next.rings = next.rings.filter((r) => r.life > 0);
+  next.shake = Math.max(0, next.shake - dtMs);
 
-  // --- where you pointed --------------------------------------------------
-  if (input !== null) focus = input;
-  if (focus && targetD(g, focus) === null) focus = null;
+  if (g.phase !== "playing") return next;
 
-  const at = aim({ ...g, focus });
+  next.elapsed = g.elapsed + dt;
+  if (input.target) next.target = { ...input.target };
 
-  // --- the squad fires on its own ----------------------------------------
-  allies = allies.map((a) => {
-    const cooldown = a.cooldown - dtMs;
-    if (cooldown > 0 || !at) return { ...a, cooldown };
-    bullets = [...bullets, { id: nextId++, d: 0, target: at }];
-    return { ...a, cooldown: cooldown + FIRE_MS };
-  });
-  bullets = capped(bullets, MAX_BULLETS);
+  // Firm follow, frame-rate independent.
+  const k = 1 - Math.exp(-FOLLOW * dt);
+  next.player.x += (next.target.x - next.player.x) * k;
+  next.player.y += (next.target.y - next.player.y) * k;
+  next.player.x = Math.min(Math.max(next.player.x, 0.02), next.world.x - 0.02);
+  next.player.y = Math.min(Math.max(next.player.y, 0.02), next.world.y - 0.02);
 
-  // --- bullets travel, and land ------------------------------------------
-  const survived: Bullet[] = [];
-  for (const b of bullets) {
-    const d = b.d + BULLET_SPEED * dt;
-    const where = targetD({ ...g, foes, seal }, b.target);
+  const cutoff = next.elapsed - TRAIL_KEEP_MS / 1000;
+  const trail = [...g.trail, { x: next.player.x, y: next.player.y, t: next.elapsed }];
+  let drop = 0;
+  while (drop + 1 < trail.length && trail[drop + 1].t < cutoff) drop++;
+  next.trail = drop > 0 ? trail.slice(drop) : trail;
 
-    if (where === null) continue; // whatever it was aimed at is already gone
-    if (d < where) {
-      survived.push({ ...b, d });
-      continue;
-    }
+  const here = next.shades
+    .map((s) => shadeAt(next, s))
+    .filter((p): p is Vec => p !== null);
 
-    const t = b.target;
-    if (t.kind === "foe") {
-      foes = foes.map((f) => (f.id === t.id ? { ...f, hp: f.hp - 1, hurt: HURT_MS } : f));
-    } else if (seal) {
-      const hp = seal.hp - 1;
-      if (hp > 0) {
-        seal = { ...seal, hp, hurt: HURT_MS };
-      } else {
-        // The hit that empties a crystal is the one that frees someone.
-        broken += 1;
-        for (let k = 0; k < PER_BREAK; k++) {
-          allies = [...allies, { id: nextId++, slot: allies.length, cooldown: k * 190 }];
-        }
-        for (let i = 0; i < 7; i++) {
-          shards = [...shards, { id: nextId++, life: SHARD_MS }];
-        }
-        shards = capped(shards, MAX_SHARDS);
-        seal = broken < SEALS.length ? raise(broken, nextId++) : null;
-        if (broken >= SEALS.length) surgeLeft = SURGE;
-        focus = null;
-      }
+  // Caught by where you have already been.
+  for (const [i, shade] of next.shades.entries()) {
+    const at = here[i];
+    if (!at || next.elapsed < shade.armedAt) continue;
+    if (overlaps(next.player, PLAYER_HIT, at, SHADE_HIT)) {
+      next.phase = "lost";
+      next.endedAt = next.elapsed;
+      burst(next, next.player, "caught", 26);
+      next.shake = 420;
+      return next;
     }
   }
-  bullets = survived;
 
-  // --- the lane -----------------------------------------------------------
-  foes = foes.map((f) => ({
-    ...f,
-    d: Math.max(0, f.d - f.speed * dt),
-    hurt: Math.max(0, f.hurt - dtMs),
-  }));
+  if (next.star && overlaps(next.player, PLAYER_HIT, next.star, STAR_HIT)) {
+    burst(next, next.star, "star", 14);
+    next.score = g.score + 1;
 
-  if (foes.some((f) => f.d <= 0)) phase = "lost";
+    if (next.score >= WIN_AT) {
+      next.phase = "won";
+      next.endedAt = next.elapsed;
+      next.star = null;
+      burst(next, next.player, "won", 40);
+      return next;
+    }
 
-  const standing = foes.length;
-  foes = foes.filter((f) => f.hp > 0);
-  if (foes.length < standing && !opened) {
-    // The squad has now shown what it does unasked. Only then is there a
-    // choice worth putting in front of anyone.
-    opened = true;
-    seal = raise(0, nextId++);
-  }
-
-  // --- who arrives next ---------------------------------------------------
-  if (phase === "playing" && surgeLeft !== 0) {
-    spawnTimer -= dtMs;
-    if (spawnTimer <= 0 && foes.length < MAX_FOES) {
-      const [roll, s1] = nextRandom(seed);
-      seed = s1;
-      const kind = KINDS[Math.floor(roll * KINDS.length)];
-      const surging = surgeLeft > 0;
-      foes = [
-        ...foes,
+    if (next.score % STAR_PER_SHADE === 0 && next.shades.length < DELAYS.length) {
+      next.shades = [
+        ...next.shades,
         {
-          id: nextId++,
-          d: 1,
-          speed: surging ? kind.speed * 1.2 : kind.speed,
-          hp: kind.hp,
-          maxHp: kind.hp,
-          hurt: 0,
+          id: next.nextId++,
+          delay: DELAYS[next.shades.length],
+          armedAt: next.elapsed + ARM_MS / 1000,
         },
       ];
-      if (surging) surgeLeft -= 1;
-
-      const ease = Math.min(1, g.elapsed / GAP_EASE_MS);
-      spawnTimer = (GAP_FROM + (GAP_TO - GAP_FROM) * ease) * (surging ? 0.5 : 1);
     }
+
+    const [star, seed] = placeStar(next, here);
+    next.star = star;
+    next.seed = seed;
   }
 
-  if (phase === "playing" && surgeLeft === 0 && foes.length === 0) phase = "won";
-
-  shards = shards
-    .map((s) => ({ ...s, life: s.life - dtMs }))
-    .filter((s) => s.life > 0);
-
-  return {
-    phase,
-    opened,
-    allies,
-    foes,
-    bullets,
-    seal,
-    broken,
-    focus,
-    shards,
-    spawnTimer,
-    surgeLeft,
-    elapsed: g.elapsed + dtMs,
-    nextId,
-    seed,
-  };
+  return next;
 }

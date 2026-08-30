@@ -1,10 +1,12 @@
+/* One Second Behind --- a neon board and almost nothing else. Chrome stays out
+   of the way: a small title, eight dots, and the ending. */
+
 :root {
-  --ink: #07060e;
-  --ally: #9fe8ff;
-  --ally-warm: #ffe6a8;
-  --crystal: #7ff0d6;
-  --shade: #ff7a5c;
-  --shot: #ffd76a;
+  --ink: #070814;
+  --player: #67f5ff;
+  --shade: #ff647c;
+  --star: #ffd166;
+  --quiet: #7d88b0;
   color-scheme: dark;
 }
 
@@ -12,222 +14,156 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
-  min-height: 100svh;
-  background: radial-gradient(130% 100% at 50% 15%, #191338 0%, var(--ink) 72%);
-  color: #d9d4ef;
+  background: var(--ink);
+  color: var(--quiet);
   font-family: system-ui, sans-serif;
-  overflow: hidden;
-}
-
-header {
-  position: fixed;
-  inset: 0 0 auto auto;
-  padding: 0.6rem 0.9rem;
-  z-index: 2;
-}
-
-nav a {
-  color: #6a6390;
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
-  text-decoration: none;
-  opacity: 0.5;
-}
-
-nav a:hover,
-nav a:focus-visible {
-  opacity: 1;
 }
 
 main {
   margin: 0;
 }
 
-#title {
-  position: fixed;
-  inset: auto 0 auto 0;
-  top: 3.5svh;
-  margin: 0;
-  text-align: center;
-  font-size: clamp(1.5rem, 4.5vw, 2.8rem);
-  font-weight: 300;
-  letter-spacing: 0.32em;
-  text-indent: 0.32em;
-  color: #cfe9ff;
-  text-shadow: 0 0 24px rgba(127, 240, 214, 0.3);
-  pointer-events: none;
-  transition: opacity 1s ease;
-  z-index: 1;
-}
-
-:root[data-started="yes"] #title {
-  opacity: 0;
-}
-
-/* The board is the viewport. Centring it inside a grid let the box shrink and
-   slide off-centre, which moved the whole lane without moving a coordinate. */
-#stage {
+#board {
   position: fixed;
   inset: 0;
   width: 100%;
   height: 100%;
+  display: block;
   touch-action: none;
-  user-select: none;
+  cursor: none;
+  outline: none;
 }
 
-.off {
-  display: none;
+#board:focus-visible {
+  outline: 1px solid rgba(103, 245, 255, 0.35);
+  outline-offset: -1px;
 }
 
-#line {
-  stroke: var(--crystal);
-  stroke-width: 0.4;
-  opacity: 0.4;
-}
-
-/* --- your squad --------------------------------------------------------- */
-
-.ally .head,
-.ally .body {
-  fill: var(--ally);
-}
-
-.ally {
-  filter: drop-shadow(0 0 1.6px rgba(159, 232, 255, 0.9));
-}
-
-.bullet {
-  fill: var(--shot);
-  filter: drop-shadow(0 0 1.2px var(--shot));
-}
-
-/* --- what's coming ------------------------------------------------------ */
-
-.foe,
-#seal {
-  cursor: pointer;
-}
-
-.foe .hull {
-  fill: #2f2145;
-  stroke: #6b4c93;
-  stroke-width: 0.7;
-}
-
-.foe .horn {
-  fill: #6b4c93;
-}
-
-.foe .eye {
-  fill: var(--shade);
-}
-
-.foe.hurt .hull {
-  fill: #6d4a7d;
-}
-
-.ring {
-  fill: none;
-  stroke: var(--shot);
-  stroke-width: 0.55;
-  stroke-dasharray: 2 2.2;
-  opacity: 0;
-  transition: opacity 140ms ease;
-}
-
-.aimed .ring {
-  opacity: 0.95;
-}
-
-/* --- the crystal -------------------------------------------------------- */
-
-#seal .post {
-  fill: rgba(127, 240, 214, 0.08);
-  stroke: var(--crystal);
-  stroke-width: 0.9;
-}
-
-#seal .fill {
-  fill: rgba(127, 240, 214, 0.28);
-  stroke: none;
-  transform-box: fill-box;
-  transform-origin: bottom;
-  scale: 1 var(--left, 1);
-  transition: scale 160ms ease-out;
-}
-
-#seal.hurt .fill {
-  fill: rgba(190, 255, 240, 0.55);
-}
-
-#seal .captive .head,
-#seal .captive .body {
-  fill: #eafff9;
-}
-
-#seal .captive {
-  opacity: 0.85;
-}
-
-#seal-count {
-  fill: #f2fffb;
-  font-size: 11px;
-  font-weight: 700;
-  font-family: ui-monospace, monospace;
-  pointer-events: none;
-}
-
-.shard {
-  fill: var(--crystal);
-}
-
-/* --- how a round ends --------------------------------------------------- */
-
-:root[data-phase="won"] main::after,
-:root[data-phase="lost"] main::after {
-  content: "";
+header {
   position: fixed;
-  inset: 0;
-  background: rgba(7, 6, 14, 0.6);
+  inset: 0 0 auto auto;
+  padding: 0.7rem 0.95rem;
+  z-index: 3;
+}
+
+nav a {
+  color: var(--quiet);
+  font-size: 0.68rem;
+  letter-spacing: 0.09em;
+  text-decoration: none;
+  opacity: 0.35;
+}
+
+nav a:hover,
+nav a:focus-visible {
+  opacity: 0.9;
+}
+
+#title {
+  position: fixed;
+  inset: auto auto 1.1rem 1.2rem;
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--quiet);
+  opacity: 0.32;
+  pointer-events: none;
   z-index: 2;
 }
 
-#again {
+/* --- eight slots, filling with gold ------------------------------------- */
+
+#tally {
   position: fixed;
-  left: 50%;
-  top: 50%;
-  translate: -50% -50%;
-  display: none;
-  width: 4.4rem;
-  height: 4.4rem;
-  border: 1px solid rgba(127, 240, 214, 0.55);
+  inset: 1.05rem auto auto 1.2rem;
+  display: flex;
+  gap: 0.42rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  z-index: 2;
+  pointer-events: none;
+}
+
+#tally li {
+  width: 0.46rem;
+  height: 0.46rem;
   border-radius: 50%;
-  background: rgba(7, 6, 14, 0.9);
-  color: var(--crystal);
-  font-size: 2rem;
+  background: rgba(125, 136, 176, 0.22);
+  transition:
+    background 260ms ease,
+    box-shadow 260ms ease;
+}
+
+#tally li.on {
+  background: var(--star);
+  box-shadow: 0 0 8px rgba(255, 209, 102, 0.75);
+}
+
+/* --- the ending --------------------------------------------------------- */
+
+#ending {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 1.5rem;
+  justify-items: center;
+  background: rgba(7, 8, 20, 0.72);
+  z-index: 4;
+}
+
+#ending[hidden] {
+  display: none;
+}
+
+#verdict {
+  margin: 0;
+  font-size: clamp(1rem, 3.4vw, 1.55rem);
+  font-weight: 300;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+:root[data-phase="lost"] #verdict {
+  color: var(--shade);
+  text-shadow: 0 0 26px rgba(255, 100, 124, 0.4);
+}
+
+:root[data-phase="won"] #verdict {
+  color: var(--star);
+  text-shadow: 0 0 30px rgba(255, 209, 102, 0.45);
+}
+
+#again {
+  width: 3.9rem;
+  height: 3.9rem;
+  border: 1px solid rgba(125, 136, 176, 0.45);
+  border-radius: 50%;
+  background: transparent;
+  color: #cfd8f5;
+  font-size: 1.7rem;
   line-height: 1;
   cursor: pointer;
-  z-index: 3;
+  transition:
+    border-color 200ms ease,
+    background 200ms ease;
 }
 
 #again:hover,
 #again:focus-visible {
-  background: rgba(127, 240, 214, 0.16);
-}
-
-:root[data-phase="won"] #again,
-:root[data-phase="lost"] #again {
-  display: block;
-}
-
-:root[data-phase="lost"] #stage {
-  filter: saturate(0.3) brightness(0.6);
-  transition: filter 500ms ease;
-}
-
-:root[data-phase="won"] #stage {
-  filter: brightness(1.2);
-  transition: filter 700ms ease;
+  border-color: rgba(103, 245, 255, 0.7);
+  background: rgba(103, 245, 255, 0.1);
 }
