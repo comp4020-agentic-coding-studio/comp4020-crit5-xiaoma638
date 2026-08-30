@@ -113,6 +113,24 @@ first cat had finished arriving; and cheese was being placed at whichever legal
 spot stood clearest of the cats, quietly routing every trip around the danger
 in a game that is supposed to be about ground you have already covered.
 
+### 7. A metaphor needs a source, not just a skin
+
+Renaming the parts was not enough. The cat still arrived as a dashed outline on
+empty floor --- a system announcing a spawn --- and a player read it as exactly
+that. The mouse and the cheese worked because a kitchen accounts for both of
+them; nothing in the room accounted for a cat.
+
+So the cats sleep in a bed in the corner from the first frame, and eating
+cheese wakes one: ear, eyes, stretch, out, nose down, follow
+([`bcc69d9`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-xiaoma638/commit/bcc69d9)). The warning is no longer a UI state, it is
+an animal getting up, and the causal chain a player can now watch --- noise
+wakes cat, cat leaves bed, cat finds prints --- is the same chain that explains
+the rules.
+
+The general lesson, and the one I would take to any brief that says "no
+instructions": every element has to be accounted for by the world it is in.
+An unexplained element does not become explained by being renamed.
+
 ## What the tests cannot judge
 
 Whether a stranger reaches an ending inside five minutes, and whether the
