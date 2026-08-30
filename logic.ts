@@ -46,10 +46,18 @@ export function stageLength(drone: Drone, state: DroneState): number {
   return state === "booting" ? BOOTING_S : state === "locking" ? LOCKING_S : 0;
 }
 
+/** Just clear of the cradle: where a drone waits if the trace is not ready.
+    Never back inside the bay --- a drone that reverses into its charger reads
+    as broken, which is exactly what it was. */
+export function entryFor(g: Game, drone: Drone): Vec {
+  const slot = slotAt(g.world, drone.slot, DELAYS.length);
+  return { x: slot.x + 0.22, y: slot.y };
+}
+
 /** How far out of its cradle a leaving drone has got, at its own speed. */
 export function driveOut(g: Game, drone: Drone): { at: Vec; done: boolean } {
   const slot = slotAt(g.world, drone.slot, DELAYS.length);
-  const target = sample(g.trail, drone.anchor) ?? slot;
+  const target = sample(g.trail, drone.anchor) ?? entryFor(g, drone);
   const total = Math.hypot(target.x - slot.x, target.y - slot.y);
   const gone = DRONE_SPEED * drone.stateFor;
   if (total < 1e-6 || gone >= total) return { at: target, done: true };
@@ -140,7 +148,11 @@ const RUN = 0.42;
 /** Eases to a stop inside this, so it settles instead of jittering. */
 const ARRIVE = 0.05;
 
-const TRAIL_KEEP_MS = 2600;
+// Must outlast the longest delay any drone can end up with, and a drone that
+// drove the length of the hall adopts however long that drive took. Keep less
+// than that and `sample` returns null for the trace it is standing on, which
+// silently pins it wherever the fallback points.
+const TRAIL_KEEP_MS = 12_000;
 const MAX_PARTICLES = 180;
 const MAX_RINGS = 12;
 
@@ -197,14 +209,15 @@ export function droneAt(g: Game, drone: Drone): Vec | null {
     return slotAt(g.world, drone.slot, DELAYS.length);
   }
 
-  // Where the prints it was sent for begin. It walks to that spot and waits
-  // over it; by the time it looks up, the trail has caught up to the same
-  // place, so following starts without a jump.
-  const start = sample(g.trail, drone.anchor) ?? drone.from;
+  // Where the trace it was sent for begins. It drives to that spot and holds
+  // over it; by the time its scanner comes up, the trail has caught up to the
+  // same place, so following starts without a jump.
+  const start = sample(g.trail, drone.anchor) ?? entryFor(g, drone);
 
   if (drone.state === "leaving") return driveOut(g, drone).at;
   if (drone.state === "locking") return start;
-  return sample(g.trail, g.elapsed - drone.delay) ?? start;
+  // Out on the floor and waiting is fine; reversing into the charger is not.
+  return sample(g.trail, g.elapsed - drone.delay) ?? entryFor(g, drone);
 }
 
 /** The trail, read at a moment in time. Null before the trail reaches back. */

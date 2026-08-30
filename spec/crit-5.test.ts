@@ -3,7 +3,9 @@ import { join, relative, resolve, sep } from "node:path";
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
 import {
+  droneAt,
   DRONE_HIT,
+  slotAt,
   dronesDue,
   DELAYS,
   initial,
@@ -301,5 +303,75 @@ describe("spec: drones arrive on the cheese, never before", () => {
       after.drones.filter((c) => c.state === "booting").length,
       "it opens an eye where it lies --- nothing is spawned",
     ).toBe(1);
+  });
+});
+
+// A drone that never leaves its charger is not a game. This one did: the trail
+// was kept for less time than the delay a drone ends up reading, so `sample`
+// returned nothing for the trace under it and the fallback pinned it to the
+// bay --- fully "active", collidable, and parked on its own charger, which is
+// the worst of both. These pin the whole launch, end to end.
+
+/** Lift the first gem where she stands, then never move again. */
+function alarmed(): Game {
+  const g = initial({ x: 1.6, y: 1 }, 7);
+  return { ...g, gem: { x: g.player.x, y: g.player.y, born: 0 } };
+}
+
+function held(g: Game, seconds: number): Game {
+  let out = g;
+  for (let t = 0; t < seconds * 1000; t += 16) out = step(out, { target: out.player }, 16);
+  return out;
+}
+
+describe("spec: a drone leaves its cradle", () => {
+  it("powers up the moment the alarm goes", () => {
+    expect(held(alarmed(), 0.1).drones[0].state).toBe("booting");
+  });
+
+  it("pulls out once it has powered up", () => {
+    expect(held(alarmed(), 1.3).drones[0].state).toBe("leaving");
+  });
+
+  it("gets all the way to hunting with nobody moving a muscle", () => {
+    const after = held(alarmed(), 9);
+
+    expect(
+      after.drones[0].state,
+      "standing still is the player's business --- it must not strand the drone",
+    ).toBe("hunting");
+  });
+
+  it("is out on the floor once it is hunting, not sat on its charger", () => {
+    const after = held(alarmed(), 9);
+    const d = after.drones[0];
+    const at = droneAt(after, d);
+    const cradle = slotAt(after.world, d.slot, DELAYS.length);
+
+    expect(at).not.toBeNull();
+    expect(
+      Math.hypot(at!.x - cradle.x, at!.y - cradle.y),
+      "a drone parked on its own charger is the bug this test exists for",
+    ).toBeGreaterThan(0.2);
+  });
+
+  it("touches nobody on the way out", () => {
+    let g = alarmed();
+    for (let t = 0; t < 9000; t += 16) {
+      g = step(g, { target: g.player }, 16);
+      if (g.drones[0].state === "hunting") break;
+      expect(g.phase, "nothing that is still launching can end a round").toBe("playing");
+    }
+  });
+
+  it("starts over clean", () => {
+    const played = held(alarmed(), 9);
+    const fresh = initial(played.world, 3);
+
+    expect(fresh.drones.every((d) => d.state === "docked" && !d.live)).toBe(true);
+    expect(fresh.trail.length, "no leftover trail for a new drone to read").toBe(1);
+    expect(fresh.score).toBe(0);
+    expect(fresh.elapsed).toBe(0);
+    expect(fresh.gem, "and a gem back in its case").not.toBeNull();
   });
 });
