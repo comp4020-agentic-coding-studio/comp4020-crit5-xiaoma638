@@ -241,7 +241,7 @@ describe("spec: a cat will not wake on top of you", () => {
 // even at point-blank range.
 
 describe("spec: an arriving cat cannot catch anyone", () => {
-  const arriving: CatState[] = ["looming", "entering", "sniffing"];
+  const arriving: CatState[] = ["sleeping", "waking", "leaving", "sniffing"];
 
   for (const state of arriving) {
     it(`survives a ${state} cat sitting right on the player`, () => {
@@ -278,7 +278,27 @@ describe("spec: cats arrive on the cheese, never before", () => {
     expect(catsDue(99)).toBe(DELAYS.length);
   });
 
-  it("opens with nothing hunting", () => {
-    expect(initial().cats, "the first piece of cheese is taken in peace").toEqual([]);
+  it("opens with every cat asleep in the bed", () => {
+    const cats = initial().cats;
+
+    expect(cats.length, "they are in the room from the first frame").toBe(DELAYS.length);
+    expect(
+      cats.every((c) => c.state === "sleeping" && !c.live),
+      "and the first piece of cheese is taken in peace",
+    ).toBe(true);
+  });
+
+  it("wakes one, and only one, on the first piece of cheese", () => {
+    let g = initial();
+    // Cheese, right where she is standing.
+    g = { ...g, star: { x: g.player.x, y: g.player.y, born: 0 } };
+
+    const after = step(g, { target: g.player }, 16);
+
+    expect(after.cats.filter((c) => c.state !== "sleeping").length).toBe(1);
+    expect(
+      after.cats.filter((c) => c.state === "waking").length,
+      "it opens an eye where it lies --- nothing is spawned",
+    ).toBe(1);
   });
 });

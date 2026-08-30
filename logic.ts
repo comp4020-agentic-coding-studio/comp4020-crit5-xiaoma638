@@ -17,10 +17,11 @@ export interface TrailPoint {
   t: number;
 }
 
-/** A cat arrives in stages, and none of the early ones can touch you: eyes at
-    the edge first, then it comes in, then its nose goes down on the prints ---
-    only after all that does it start following them. */
-export type CatState = "looming" | "entering" | "sniffing" | "tracking";
+/** The cats are asleep in their bed from the first frame. Cheese wakes one:
+    ears, eyes, a stretch, out of the bed, nose to the floor, and only then does
+    it follow. Nothing before "tracking" can touch anyone --- and none of it is
+    a system announcing a spawn, it is an animal being woken by a noise. */
+export type CatState = "sleeping" | "waking" | "leaving" | "sniffing" | "tracking";
 
 export interface Cat {
   id: number;
@@ -29,9 +30,9 @@ export interface Cat {
   state: CatState;
   /** Seconds spent in the current stage. */
   stateFor: number;
-  /** Elapsed time when it was sent. The prints it will follow start here. */
+  /** Elapsed time when it woke. The prints it will follow start here. */
   anchor: number;
-  /** Just off the edge, where it comes in from. */
+  /** The bed it came out of. */
   from: Vec;
   /** True once it can actually catch you. */
   live: boolean;
@@ -40,13 +41,15 @@ export interface Cat {
 // Arriving takes exactly as long as the cat runs behind you, split three ways.
 // That is not decoration: it means the moment its nose comes up, the prints it
 // has been standing over are the ones it starts to follow, with no jump.
-const LOOMING = 0.42;
-const ENTERING = 0.24;
-const SNIFFING = 0.34;
+const SHARE: Record<string, number> = { waking: 0.4, leaving: 0.28, sniffing: 0.32 };
 
 export function stageLength(cat: Cat, state: CatState): number {
-  const share = state === "looming" ? LOOMING : state === "entering" ? ENTERING : SNIFFING;
-  return cat.delay * share;
+  return cat.delay * (SHARE[state] ?? 0);
+}
+
+/** The bed, up in one corner of the room. */
+export function bedAt(world: Vec): Vec {
+  return { x: world.x * 0.12, y: world.y * 0.18 };
 }
 
 export interface Star {
@@ -160,15 +163,15 @@ function random(seed: number): [number, number] {
 
 /** Where a cat is on screen, through all four stages of arriving. */
 export function catAt(g: Game, cat: Cat): Vec | null {
-  if (cat.state === "looming") return cat.from;
+  if (cat.state === "sleeping" || cat.state === "waking") return cat.from;
 
   // Where the prints it was sent for begin. It walks to that spot and waits
   // over it; by the time it looks up, the trail has caught up to the same
   // place, so following starts without a jump.
   const start = sample(g.trail, cat.anchor) ?? cat.from;
 
-  if (cat.state === "entering") {
-    const t = Math.min(1, cat.stateFor / stageLength(cat, "entering"));
+  if (cat.state === "leaving") {
+    const t = Math.min(1, cat.stateFor / stageLength(cat, "leaving"));
     const eased = t * t * (3 - 2 * t);
     return {
       x: cat.from.x + (start.x - cat.from.x) * eased,
@@ -177,16 +180,6 @@ export function catAt(g: Game, cat: Cat): Vec | null {
   }
   if (cat.state === "sniffing") return start;
   return sample(g.trail, g.elapsed - cat.delay) ?? start;
-}
-
-/** Just off whichever edge is nearest, so it comes in from the room. */
-function edgeNear(p: Vec, world: Vec): Vec {
-  const gaps = [p.x, world.x - p.x, p.y, world.y - p.y];
-  const nearest = Math.min(...gaps);
-  if (nearest === gaps[0]) return { x: -0.07, y: p.y };
-  if (nearest === gaps[1]) return { x: world.x + 0.07, y: p.y };
-  if (nearest === gaps[2]) return { x: p.x, y: -0.07 };
-  return { x: p.x, y: world.y + 0.07 };
 }
 
 /** The trail, read at a moment in time. Null before the trail reaches back. */
@@ -214,8 +207,17 @@ export function initial(world: Vec = { x: 1.6, y: 1 }, seed = 1): Game {
     player: { ...player },
     target: { ...player },
     trail: [{ x: player.x, y: player.y, t: 0 }],
-    // None yet. Nothing hunts you until you have taken something.
-    cats: [],
+    // All of them, asleep in the bed. Visible from the first frame, which is
+    // its own kind of warning, and harmless until something wakes one.
+    cats: DELAYS.map((delay, i) => ({
+      id: 10 + i,
+      delay,
+      state: "sleeping" as CatState,
+      stateFor: i * 0.7,
+      anchor: 0,
+      from: bedAt(world),
+      live: false,
+    })),
     // Close enough that it is taken almost by accident, which is the lesson.
     star: { x: player.x + 0.19, y: player.y - 0.1, born: 0 },
     score: 0,
@@ -374,9 +376,11 @@ export function step(g: Game, input: Input, dtMs: number): Game {
   // stood in, and pausing after cheese is the most natural thing anyone does.
   next.cats = next.cats.map((cat, i) => {
     const stateFor = cat.stateFor + dt;
+    // Asleep is not a stage that times out --- only cheese ends it.
+    if (cat.state === "sleeping") return { ...cat, stateFor };
     const onward: Record<string, CatState> = {
-      looming: "entering",
-      entering: "sniffing",
+      waking: "leaving",
+      leaving: "sniffing",
       sniffing: "tracking",
     };
     if (cat.state !== "tracking") {
@@ -453,20 +457,15 @@ export function step(g: Game, input: Input, dtMs: number): Game {
       return next;
     }
 
-    if (next.cats.length < catsDue(next.score)) {
-      const delay = DELAYS[next.cats.length];
-      next.cats = [
-        ...next.cats,
-        {
-          id: next.nextId++,
-          delay,
-          state: "looming",
-          stateFor: 0,
-          anchor: next.elapsed,
-          from: edgeNear(next.player, next.world),
-          live: false,
-        },
-      ];
+    // The noise wakes one of them. Nothing is created; something opens an eye.
+    const awake = next.cats.filter((c) => c.state !== "sleeping").length;
+    if (awake < catsDue(next.score)) {
+      let woken = false;
+      next.cats = next.cats.map((c) => {
+        if (woken || c.state !== "sleeping") return c;
+        woken = true;
+        return { ...c, state: "waking" as CatState, stateFor: 0, anchor: next.elapsed };
+      });
     }
 
     const [star, seed] = placeStar(next, here);

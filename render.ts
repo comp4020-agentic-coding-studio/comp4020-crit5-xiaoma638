@@ -5,10 +5,12 @@
 // number that turns the game into pixels.
 
 import {
+  bedAt,
   catAt,
   CAT_DRAW,
     PLAYER_DRAW,
   sample,
+  stageLength,
   STAR_HIT,
   type Cat,
   type Game,
@@ -22,7 +24,8 @@ const MOUSE = "#aac5de";
 const MOUSE_EAR = "#8ba7c4";
 const NOSE = "#ff9fb5";
 const CHEESE = "#ffd166";
-const CAT = "#ff647c";
+const CAT = "#e8794a";
+const CAT_DARK = "#c95f38";
 const PRINT = "rgba(170, 197, 222, 0.5)";
 
 const canvas = document.getElementById("board") as HTMLCanvasElement;
@@ -102,24 +105,52 @@ function room(world: Vec): void {
   }
   ctx.stroke();
 
+  // A table with two legs, a carton, and a food bowl. Named things, so the
+  // room reads as a room rather than as three grey rectangles.
   ctx.strokeStyle = PROP;
-  ctx.lineWidth = px(0.008);
-  // A table in one corner, a carton in the other. Outlines only: the room is
-  // scenery, and the round has to stay readable across it.
-  const legs: Vec[] = [
-    { x: world.x * 0.12, y: world.y * 0.14 },
-    { x: world.x * 0.12, y: world.y * 0.86 },
-  ];
-  for (const leg of legs) {
-    ctx.strokeRect(px(leg.x - 0.035), px(leg.y - 0.09), px(0.07), px(0.18));
+  ctx.lineWidth = px(0.009);
+  const tableY = world.y * 0.5;
+  for (const y of [tableY - 0.3, tableY + 0.3]) {
+    ctx.strokeRect(px(world.x - 0.16), px(y - 0.055), px(0.055), px(0.32));
+    ctx.beginPath();
+    ctx.moveTo(px(world.x - 0.185), px(y - 0.055));
+    ctx.lineTo(px(world.x - 0.06), px(y - 0.055));
+    ctx.stroke();
   }
-  ctx.strokeRect(px(world.x * 0.82), px(world.y * 0.7), px(0.22), px(0.17));
+
+  const boxX = world.x * 0.72;
+  const boxY = world.y * 0.84;
+  ctx.strokeRect(px(boxX), px(boxY), px(0.26), px(0.17));
   ctx.beginPath();
-  ctx.moveTo(px(world.x * 0.82), px(world.y * 0.7));
-  ctx.lineTo(px(world.x * 0.82 + 0.05), px(world.y * 0.7 - 0.05));
-  ctx.lineTo(px(world.x * 0.82 + 0.27), px(world.y * 0.7 - 0.05));
-  ctx.lineTo(px(world.x * 0.82 + 0.22), px(world.y * 0.7));
+  ctx.moveTo(px(boxX), px(boxY));
+  ctx.lineTo(px(boxX + 0.055), px(boxY - 0.055));
+  ctx.lineTo(px(boxX + 0.315), px(boxY - 0.055));
+  ctx.lineTo(px(boxX + 0.26), px(boxY));
+  ctx.moveTo(px(boxX + 0.055), px(boxY - 0.055));
+  ctx.lineTo(px(boxX + 0.055), px(boxY - 0.115));
   ctx.stroke();
+
+  ctx.beginPath();
+  ctx.ellipse(px(world.x * 0.3), px(world.y * 0.9), px(0.07), px(0.032), 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(px(world.x * 0.3), px(world.y * 0.9), px(0.045), px(0.02), 0, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+/** The bed the cats sleep in: a raised rim and a soft cushion. */
+function bed(world: Vec): void {
+  const at = bedAt(world);
+  const r = px(0.115);
+  ctx.fillStyle = "rgba(146, 120, 96, 0.22)";
+  ellipse(px(at.x), px(at.y), r, r * 0.74);
+  ctx.strokeStyle = "rgba(190, 160, 130, 0.45)";
+  ctx.lineWidth = px(0.011);
+  ctx.beginPath();
+  ctx.ellipse(px(at.x), px(at.y), r, r * 0.74, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = "rgba(120, 96, 76, 0.3)";
+  ellipse(px(at.x), px(at.y) + px(0.012), r * 0.74, r * 0.5);
 }
 
 // --- what the mouse leaves behind ----------------------------------------
@@ -192,63 +223,131 @@ function mouse(x: number, y: number, heading: number, sniff: number): void {
   });
 }
 
-function cat(x: number, y: number, heading: number, filled: boolean, alpha: number): void {
-  facing(x, y, heading, () => {
-    const r = px(CAT_DRAW) * 1.7; // plainly bigger than the mouse
-    const dash: [number, number] = [px(0.021), px(0.015)];
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = CAT;
+/** A cat, seen from above and a little in front: round head, two triangle
+    ears, an oval body, four feet that alternate as it runs, whiskers, and a
+    long tail carried in a curve. Half again the size of the mouse. */
+function catBody(r: number, gait: number, curl: number): void {
+  const stride = Math.sin(gait) * r * 0.34;
+  const bob = Math.abs(Math.sin(gait)) * r * 0.05;
+  const squash = 1 - curl * 0.35;
 
-    ctx.lineWidth = px(0.008);
-    if (!filled) ctx.setLineDash(dash);
-    ctx.beginPath();
-    ctx.moveTo(-r * 0.8, -r * 0.1);
-    ctx.quadraticCurveTo(-r * 2.1, -r * 0.95, -r * 2.35, r * 0.35);
-    ctx.stroke();
-    ctx.setLineDash([]);
+  // Tail: swings opposite the legs when running, wraps the body when curled.
+  ctx.strokeStyle = CAT;
+  ctx.lineWidth = r * 0.19;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.95 * squash, 0);
+  if (curl > 0.5) {
+    ctx.quadraticCurveTo(-r * 1.5, r * 1.1, r * 0.3, r * 1.05);
+  } else {
+    ctx.quadraticCurveTo(-r * 1.9, -stride * 1.4, -r * 2.1, r * 0.55 - stride);
+  }
+  ctx.stroke();
 
-    // Body, head and both ears as one outline, so the arriving cat is the
-    // same animal as the hunting one and not two anonymous blobs.
-    ctx.beginPath();
-    ctx.ellipse(-r * 0.2, 0, r * 1.05, r * 0.72, 0, 0, Math.PI * 2);
-    ctx.moveTo(r * 1.47, 0);
-    ctx.ellipse(r * 0.85, 0, r * 0.62, r * 0.58, 0, 0, Math.PI * 2);
-    ctx.moveTo(r * 0.5, -r * 0.44);
-    ctx.lineTo(r * 0.6, -r * 1.12);
-    ctx.lineTo(r * 1.06, -r * 0.52);
-    ctx.moveTo(r * 0.5, r * 0.44);
-    ctx.lineTo(r * 0.6, r * 1.12);
-    ctx.lineTo(r * 1.06, r * 0.52);
-
-    if (filled) {
-      glow(CAT, px(0.05));
-      ctx.fillStyle = CAT;
-      ctx.fill();
-      clearGlow();
-      ctx.fillStyle = "#2a0b12";
-      ellipse(r * 1.12, -r * 0.24, r * 0.11, r * 0.18);
-      ellipse(r * 1.12, r * 0.24, r * 0.11, r * 0.18);
-    } else {
-      ctx.lineWidth = px(0.005);
-      ctx.setLineDash(dash);
-      ctx.stroke();
-      ctx.setLineDash([]);
+  // Feet, two a side, alternating front to back.
+  ctx.fillStyle = CAT_DARK;
+  for (const side of [-1, 1]) {
+    for (const [i, along] of [0.42, -0.42].entries()) {
+      const swing = i === 0 ? stride : -stride;
+      ellipse(
+        r * along + swing * (1 - curl),
+        side * r * 0.62 * squash,
+        r * 0.19,
+        r * 0.15,
+      );
     }
-    ctx.globalAlpha = 1;
-  });
+  }
+
+  ctx.fillStyle = CAT;
+  ellipse(-r * 0.05, -bob, r * 1.0 * squash, r * 0.68);
+
+  const headX = r * (0.92 - curl * 0.45);
+  const headY = -bob - curl * r * 0.12;
+
+  // Ears first, so the head sits over their base.
+  ctx.beginPath();
+  ctx.moveTo(headX - r * 0.1, headY - r * 0.42);
+  ctx.lineTo(headX - r * 0.02, headY - r * 1.02);
+  ctx.lineTo(headX + r * 0.42, headY - r * 0.5);
+  ctx.moveTo(headX - r * 0.1, headY + r * 0.42);
+  ctx.lineTo(headX - r * 0.02, headY + r * 1.02);
+  ctx.lineTo(headX + r * 0.42, headY + r * 0.5);
+  ctx.fill();
+
+  ctx.fillStyle = CAT;
+  ellipse(headX, headY, r * 0.56, r * 0.52);
+
+  // Whiskers.
+  ctx.strokeStyle = "rgba(255, 226, 210, 0.5)";
+  ctx.lineWidth = r * 0.045;
+  for (const side of [-1, 1]) {
+    for (const lift of [-0.12, 0.12]) {
+      ctx.beginPath();
+      ctx.moveTo(headX + r * 0.34, headY + side * r * 0.16);
+      ctx.lineTo(headX + r * 0.95, headY + side * r * (0.3 + lift));
+      ctx.stroke();
+    }
+  }
+
+  // Eyes: shut to a line while curled, open once it is up.
+  ctx.strokeStyle = "#2a0f08";
+  ctx.lineWidth = r * 0.075;
+  ctx.fillStyle = "#2a0f08";
+  for (const side of [-1, 1]) {
+    const ex = headX + r * 0.2;
+    const ey = headY + side * r * 0.22;
+    if (curl > 0.45) {
+      ctx.beginPath();
+      ctx.moveTo(ex - r * 0.13, ey);
+      ctx.lineTo(ex + r * 0.13, ey);
+      ctx.stroke();
+    } else {
+      ellipse(ex, ey, r * 0.1, r * 0.13);
+    }
+  }
 }
 
-/** Two eyes in the dark, before anything else of it is visible. */
-function eyes(x: number, y: number, heading: number, pulse: number): void {
-  facing(x, y, heading, () => {
-    const r = px(CAT_DRAW) * 1.7;
-    ctx.globalAlpha = 0.5 + pulse * 0.5;
-    ctx.fillStyle = CAT;
-    glow(CAT, px(0.05));
-    ellipse(0, -r * 0.26, r * 0.16, r * 0.2);
-    ellipse(0, r * 0.26, r * 0.16, r * 0.2);
-    clearGlow();
-    ctx.globalAlpha = 1;
+/** A very soft shadow, so the cast stands on the floor rather than over it. */
+function contact(x: number, y: number, r: number): void {
+  ctx.fillStyle = "rgba(0, 0, 0, 0.32)";
+  ellipse(x, y + r * 0.5, r * 0.95, r * 0.4);
+}
+
+function cat(g: Game, c: Cat, x: number, y: number, heading: number): void {
+  const r = px(CAT_DRAW) * 1.5;
+  const asleep = c.state === "sleeping";
+  const waking = c.state === "waking";
+
+  // Curled tight asleep, uncurling as it wakes, up on its feet after that.
+  const wake = waking ? Math.min(1, c.stateFor / stageLength(c, "waking")) : 0;
+  const curl = asleep ? 1 : waking ? 1 - wake : 0;
+
+  // Breathing while it sleeps; a stretch on the way up; a run once it is out.
+  const breathe = asleep ? 1 + Math.sin(g.elapsed * 1.7 + c.id) * 0.035 : 1;
+  const stretch = waking && wake > 0.55 ? 1 + Math.sin((wake - 0.55) * 7) * 0.13 : 1;
+  const gait = c.state === "leaving" || c.state === "tracking" ? g.elapsed * 13 : 0;
+
+  // Asleep it faces into its bed; awake it faces where it is going.
+  const facingWay = asleep || waking ? 0.5 : heading;
+  const dip = c.state === "sniffing" ? r * 0.14 : 0;
+
+  contact(x, y + dip, r);
+  facing(x, y + dip, facingWay, () => {
+    ctx.save();
+    ctx.scale(breathe * stretch, breathe / stretch);
+    catBody(r, gait, curl);
+    ctx.restore();
+
+    // An ear twitches on the very first beat of waking: the noise reached it.
+    if (waking && wake < 0.3) {
+      ctx.fillStyle = CAT;
+      const flick = Math.sin(c.stateFor * 30) * r * 0.16;
+      ctx.beginPath();
+      ctx.moveTo(r * 0.4, -r * 0.42);
+      ctx.lineTo(r * 0.5 + flick, -r * 1.05);
+      ctx.lineTo(r * 0.85, -r * 0.5);
+      ctx.fill();
+    }
   });
 }
 
@@ -274,6 +373,7 @@ function cheese(x: number, y: number, wobble: number): void {
 export function draw(g: Game, reduced: boolean): void {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   room(g.world);
+  bed(g.world);
 
   if (g.shake > 0 && !reduced) {
     const decay = g.shake / 420;
@@ -316,33 +416,33 @@ export function draw(g: Game, reduced: boolean): void {
   for (const c of g.cats) {
     const at = catAt(g, c);
     if (!at) continue;
-    const t = g.elapsed - c.delay;
-    const before = sample(g.trail, t - 0.09);
-    const now = sample(g.trail, t);
+    // Face along the prints it is reading. Coming out of the bed that means
+    // the start of the trail, not wherever the mouse is now, or it arrives
+    // looking the wrong way.
+    const readAt = c.state === "tracking" ? g.elapsed - c.delay : c.anchor;
+    const before = sample(g.trail, readAt - 0.09);
+    const now = sample(g.trail, readAt);
     let heading = 0;
     if (before && now) {
       const dx = now.x - before.x;
       const dy = now.y - before.y;
       if (dx * dx + dy * dy > 1e-8) heading = Math.atan2(dy, dx);
     }
-    if (c.state === "looming") {
-      // Facing into the room, so the eyes read as looking at you.
-      const inward = Math.atan2(g.world.y / 2 - at.y, g.world.x / 2 - at.x);
-      eyes(px(at.x), px(at.y), inward, Math.abs(Math.sin(c.stateFor * 3.4)));
-      continue;
+    if (c.state === "leaving") {
+      const start = sample(g.trail, c.anchor);
+      if (start) heading = Math.atan2(start.y - c.from.y, start.x - c.from.x);
     }
-    if (c.state === "entering") {
-      const t2 = Math.min(1, c.stateFor / (c.delay * 0.24));
-      cat(px(at.x), px(at.y), heading, false, 0.35 + t2 * 0.4);
-      continue;
+
+    // Asleep they lie in a heap rather than in one spot, so the bed reads as
+    // holding more than one of them.
+    let dx = 0;
+    let dy = 0;
+    if (c.state === "sleeping") {
+      const i = c.id - 10;
+      dx = ((i % 2) - 0.5) * px(0.062);
+      dy = (Math.floor(i / 2) - 0.5) * px(0.052);
     }
-    if (c.state === "sniffing") {
-      // Nose to the floor: a beat that says what it is about to do.
-      const dip = Math.sin(c.stateFor * 7) * 0.1;
-      cat(px(at.x), px(at.y) + px(0.008), heading + dip, false, 0.85);
-      continue;
-    }
-    cat(px(at.x), px(at.y), heading, true, c.live ? 1 : 0.8);
+    cat(g, c, px(at.x) + dx, px(at.y) + dy, heading);
   }
 
   if (g.phase !== "lost") {
