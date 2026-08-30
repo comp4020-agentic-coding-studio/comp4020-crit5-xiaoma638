@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
+import { initial, SEALS, STAFF, SURGE, step, type Game } from "../logic.ts";
 
 // The mechanically checkable lines of this week's published spec.
 //
@@ -75,5 +76,73 @@ describe("spec: it teaches itself", () => {
 
     const prose = (main?.textContent ?? "").replace(/\s+/g, " ").trim();
     expect(prose, "the starter's placeholder copy is still on the page").not.toMatch(/Replace this with your prototype/i);
+  });
+});
+
+// The one rule of this game put under a focused test, as the spec asks. It is
+// the rule the whole thing turns on: a hit spent on the crystal is a hit not
+// spent on what's walking at you, and this is what that spend buys. It runs on
+// the pure state machine --- no DOM, no clock --- so it stays true while the
+// look of the thing changes underneath it.
+
+function midRound(over: Partial<Game> = {}): Game {
+  return { ...initial(), phase: "playing", cooldown: 0, staff: 0, ...over };
+}
+
+function sealAt(hp: number): Game["seal"] {
+  return { id: 99, index: 0, hp, maxHp: SEALS[0], hurt: 0 };
+}
+
+describe("spec: breaking a seal is what arms the staff", () => {
+  it("shatters on the hit that takes its last point, and moves the staff up", () => {
+    const before = midRound({ seal: sealAt(1) });
+    const after = step(before, { kind: "seal" }, 0);
+
+    expect(after.broken).toBe(1);
+    expect(after.staff, "a broken seal is the only thing that arms the staff").toBe(1);
+    expect(
+      after.seal?.id,
+      "that seal is gone --- whatever stands there now is the next one",
+    ).not.toBe(before.seal?.id);
+  });
+
+  it("leaves the lane bare once the last seal falls, and calls the surge", () => {
+    const last = SEALS.length - 1;
+    const after = step(
+      midRound({
+        broken: last,
+        staff: STAFF.length - 1,
+        seal: { id: 99, index: last, hp: 1, maxHp: SEALS[last], hurt: 0 },
+      }),
+      { kind: "seal" },
+      0,
+    );
+
+    expect(after.seal, "nothing else rises --- the round has somewhere to end").toBeNull();
+    expect(after.surgeLeft, "the last break is what starts the ending").toBe(SURGE);
+  });
+
+  it("stands while it still has points, and the staff waits", () => {
+    const after = step(midRound({ seal: sealAt(2) }), { kind: "seal" }, 0);
+
+    expect(after.seal?.hp).toBe(1);
+    expect(after.staff, "the staff moves on the break, not on the hit").toBe(0);
+  });
+
+  it("spends the staff's cooldown on the hit", () => {
+    const after = step(midRound({ seal: sealAt(2) }), { kind: "seal" }, 0);
+
+    expect(
+      after.cooldown,
+      "without a cooldown there is no cost to a hit, and no choice to make",
+    ).toBe(STAFF[0].cooldown);
+  });
+
+  it("ignores a hit while the staff is still cooling", () => {
+    const cooling = midRound({ seal: sealAt(1), cooldown: 100 });
+    const after = step(cooling, { kind: "seal" }, 0);
+
+    expect(after.seal?.hp, "a cooling staff fires nothing").toBe(1);
+    expect(after.staff).toBe(0);
   });
 });
