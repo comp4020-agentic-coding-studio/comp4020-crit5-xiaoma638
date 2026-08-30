@@ -146,3 +146,42 @@ describe("spec: breaking a seal is what arms the staff", () => {
     expect(after.staff).toBe(0);
   });
 });
+
+// The other half of the spec's first line: a round has to be losable, and it
+// has to end somewhere. Both are claims about the whole machine over time, not
+// about one transition, so they play it out --- a lazy player who never fires,
+// and one who spends every shot on the nearest threat until the lane is clear
+// enough to spend on the crystal.
+
+const FRAME = 16;
+
+function play(choose: (g: Game) => Input, limitMs = 240_000): Game {
+  let g = { ...initial(7), phase: "playing" as const };
+  for (let t = 0; t < limitMs; t += FRAME) {
+    if (g.phase === "won" || g.phase === "lost") break;
+    g = step(g, choose(g), FRAME);
+  }
+  return g;
+}
+
+describe("spec: a round ends somewhere", () => {
+  it("is lost by standing still --- a wrong move is possible", () => {
+    const g = play(() => null);
+
+    expect(g.phase, "shades walk to the line whether or not you fire").toBe("lost");
+  });
+
+  it("is winnable: clear the lane, break all three seals, see off the surge", () => {
+    const g = play((state) => {
+      const nearest = [...state.foes].sort((a, b) => a.d - b.d)[0];
+      // Spend on the crystal only while nothing is close enough to matter.
+      if (nearest && nearest.d < 0.55) return { kind: "foe", id: nearest.id };
+      if (state.seal) return { kind: "seal" };
+      return nearest ? { kind: "foe", id: nearest.id } : null;
+    });
+
+    expect(g.phase, "a game you cannot finish has no ending to reach").toBe("won");
+    expect(g.broken).toBe(SEALS.length);
+    expect(g.staff, "three seals is two upgrades and then the ending").toBe(STAFF.length - 1);
+  });
+});
