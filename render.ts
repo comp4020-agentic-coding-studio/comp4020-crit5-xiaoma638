@@ -10,6 +10,7 @@ import {
   droneAt,
   DRONE_DRAW,
   GEM_HIT,
+  GEM_RISE,
   PLAYER_DRAW,
   sample,
   slotAt,
@@ -369,7 +370,7 @@ function drone(g: Game, d: Drone, x: number, y: number, heading: number): void {
   });
 }
 
-function gem(x: number, y: number, wobble: number, age: number): void {
+function gem(x: number, y: number, wobble: number, age: number, rise: number): void {
   const r = px(GEM_HIT) * 1.35;
 
   // The case it stands in.
@@ -393,8 +394,10 @@ function gem(x: number, y: number, wobble: number, age: number): void {
   }
   ctx.globalAlpha = 1;
 
-  const beat = 1 + wobble * 0.08;
-  glow(GEM, px(0.05));
+  // Coming up in its case: small and faint, then full size and lit.
+  const beat = (1 + wobble * 0.08) * (0.35 + rise * 0.65);
+  ctx.globalAlpha = rise;
+  glow(GEM, px(0.05 * rise));
   ctx.fillStyle = GEM;
   ctx.beginPath();
   ctx.moveTo(x, y - r * beat);
@@ -411,6 +414,21 @@ function gem(x: number, y: number, wobble: number, age: number): void {
   ctx.lineTo(x, y);
   ctx.closePath();
   ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+/** The case the next one will rise in, warming up before it does. */
+function warming(x: number, y: number, warm: number, elapsed: number): void {
+  const r = px(GEM_HIT) * 1.35;
+  ctx.globalAlpha = warm * 0.5;
+  ctx.strokeStyle = GEM;
+  ctx.lineWidth = px(0.005);
+  ctx.strokeRect(x - r * 1.7, y - r * 1.7, r * 3.4, r * 3.4);
+  ctx.globalAlpha = warm * (0.25 + Math.sin(elapsed * 9) * 0.12);
+  ctx.beginPath();
+  ctx.arc(x, y, r * (1.1 + warm * 0.9), 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
 }
 
 export function draw(g: Game, reduced: boolean): void {
@@ -435,7 +453,9 @@ export function draw(g: Game, reduced: boolean): void {
 
   if (g.gem) {
     const age = g.elapsed - g.gem.born;
-    gem(px(g.gem.x), px(g.gem.y), Math.sin(age * 3.1), age);
+    gem(px(g.gem.x), px(g.gem.y), Math.sin(age * 3.1), age, Math.min(1, age / GEM_RISE));
+  } else if (g.pending && g.gemIn < 0.55) {
+    warming(px(g.pending.x), px(g.pending.y), 1 - g.gemIn / 0.55, g.elapsed);
   }
 
   for (const d of g.drones) {

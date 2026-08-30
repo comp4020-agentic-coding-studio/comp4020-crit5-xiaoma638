@@ -159,10 +159,24 @@ const MAX_RINGS = 12;
 const GEM_MARGIN = 0.13;
 const GEM_MIN_FROM_PLAYER = 0.34;
 const GEM_MAX_FROM_PLAYER = 0.95;
-const GEM_MIN_FROM_DRONE = 0.17;
+const GEM_MIN_FROM_DRONE = 0.26;
+/** And well away from the case just emptied, so the room keeps opening up
+    rather than sending the player back and forth over one stretch of floor. */
+const GEM_MIN_FROM_LAST = 0.45;
+
+/** The beat after a lift: carrying it, an empty room, then the next case
+    warming up. The first one runs long because it is the first. */
+const GEM_GAP_FIRST = 1;
+const GEM_GAP = 0.7;
+/** How long the next one takes to come up in its case. */
+export const GEM_RISE = 0.35;
 
 export interface Game {
   phase: Phase;
+  /** Placed, but not lit yet --- the case it will appear in. */
+  pending: Gem | null;
+  /** Seconds until it does. */
+  gemIn: number;
   /** Distance covered on foot, which drives the walk cycle. */
   stride: number;
   /** Which way the comet points. Radians. */
@@ -238,6 +252,8 @@ export function initial(world: Vec = { x: 1.6, y: 1 }, seed = 1): Game {
   const player = { x: world.x / 2, y: world.y / 2 };
   return {
     phase: "playing",
+    pending: null,
+    gemIn: 0,
     stride: 0,
     heading: 0,
     flash: 0,
@@ -272,7 +288,7 @@ export function initial(world: Vec = { x: 1.6, y: 1 }, seed = 1): Game {
   };
 }
 
-function placeGem(g: Game, drones: Vec[]): [Gem, number] {
+function placeGem(g: Game, drones: Vec[], last: Vec | null): [Gem, number] {
   let seed = g.seed;
   let best: Gem | null = null;
   let bestScore = -1;
@@ -292,6 +308,8 @@ function placeGem(g: Game, drones: Vec[]): [Gem, number] {
     let nearestDrone = Infinity;
     for (const s of drones) nearestDrone = Math.min(nearestDrone, Math.hypot(x - s.x, y - s.y));
     if (nearestDrone < GEM_MIN_FROM_DRONE) continue;
+
+    if (last && Math.hypot(x - last.x, y - last.y) < GEM_MIN_FROM_LAST) continue;
 
     // The first spot that clears the guards, not the safest one on the board.
     // Preferring the safest quietly routed every trip around the danger, which
@@ -352,6 +370,7 @@ export function step(g: Game, input: Input, dtMs: number): Game {
   const next: Game = {
     ...g,
     gem: g.gem ? { ...g.gem } : null,
+    pending: g.pending ? { ...g.pending } : null,
     player: { ...g.player },
     target: { ...g.target },
     world: input.world ? { ...input.world } : { ...g.world },
@@ -512,6 +531,7 @@ export function step(g: Game, input: Input, dtMs: number): Game {
   }
 
   if (next.gem && overlaps(next.player, PLAYER_HIT, next.gem, GEM_HIT)) {
+    const lifted: Vec = { x: next.gem.x, y: next.gem.y };
     // The first one is the whole lesson, so it lands twice as hard.
     burst(next, next.gem, "gem", g.score === 0 ? 30 : 16);
     next.score = g.score + 1;
@@ -538,9 +558,22 @@ export function step(g: Game, input: Input, dtMs: number): Game {
       });
     }
 
-    const [gem, seed] = placeGem(next, here);
-    next.gem = gem;
+    // The room goes quiet for a beat: no gem anywhere, then the next case
+    // warms up and it rises. Taking one should land before the next is dangled.
+    const [gem, seed] = placeGem(next, here, lifted);
+    next.gem = null;
+    next.pending = gem;
+    next.gemIn = next.score === 1 ? GEM_GAP_FIRST : GEM_GAP;
     next.seed = seed;
+  }
+
+  if (next.phase === "playing" && next.gem === null && next.pending) {
+    next.gemIn -= dt;
+    if (next.gemIn <= 0) {
+      next.gem = { ...next.pending, born: next.elapsed };
+      next.pending = null;
+      next.gemIn = 0;
+    }
   }
 
   return next;

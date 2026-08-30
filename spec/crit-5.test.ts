@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   droneAt,
   DRONE_HIT,
+  GEM_RISE,
   slotAt,
   dronesDue,
   DELAYS,
@@ -374,5 +375,50 @@ describe("spec: a drone leaves its cradle", () => {
     expect(fresh.score).toBe(0);
     expect(fresh.elapsed).toBe(0);
     expect(fresh.gem, "and a gem back in its case").not.toBeNull();
+  });
+});
+
+// Taking one should land before the next is dangled. Without the pause a lift
+// reads as restocking a shelf rather than as getting away with something.
+
+describe("spec: a gem takes a beat to come back", () => {
+  function lifting(): Game {
+    const g = initial({ x: 1.6, y: 1 }, 5);
+    return { ...g, gem: { x: g.player.x, y: g.player.y, born: 0 } };
+  }
+
+  it("leaves the room empty for a moment after a lift", () => {
+    const after = step(lifting(), { target: initial().player }, 16);
+
+    expect(after.score).toBe(1);
+    expect(after.gem, "nothing to chase while the take is still landing").toBeNull();
+    expect(after.pending, "but the next case is already chosen").not.toBeNull();
+    expect(after.gemIn).toBeGreaterThan(0.5);
+  });
+
+  it("brings the next one up once the beat has passed", () => {
+    let g = step(lifting(), { target: initial().player }, 16);
+    const waitedFor = g.gemIn;
+    for (let t = 0; t < (waitedFor + 0.1) * 1000; t += 16) {
+      g = step(g, { target: g.player }, 16);
+    }
+
+    expect(g.gem, "the next one has to actually arrive").not.toBeNull();
+    expect(g.pending).toBeNull();
+    expect(g.elapsed - g.gem!.born, "and it is new, so it can be seen rising").toBeLessThan(
+      GEM_RISE * 2,
+    );
+  });
+
+  it("puts it well away from the case just emptied", () => {
+    let g = lifting();
+    const was = { x: g.gem!.x, y: g.gem!.y };
+    g = step(g, { target: g.player }, 16);
+
+    const next = g.pending!;
+    expect(
+      Math.hypot(next.x - was.x, next.y - was.y),
+      "sending them back over the same stretch of floor wastes the room",
+    ).toBeGreaterThan(0.4);
   });
 });
