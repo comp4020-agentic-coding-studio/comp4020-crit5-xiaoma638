@@ -42,10 +42,22 @@ export interface Drone {
 // Arriving takes exactly as long as the drone runs behind you, split three ways.
 // That is not decoration: it means the moment its nose comes up, the prints it
 // has been standing over are the ones it starts to follow, with no jump.
-const SHARE: Record<string, number> = { booting: 0.4, leaving: 0.28, locking: 0.32 };
-
 export function stageLength(drone: Drone, state: DroneState): number {
-  return drone.delay * (SHARE[state] ?? 0);
+  return state === "booting" ? BOOTING_S : state === "locking" ? LOCKING_S : 0;
+}
+
+/** How far out of its cradle a leaving drone has got, at its own speed. */
+export function driveOut(g: Game, drone: Drone): { at: Vec; done: boolean } {
+  const slot = slotAt(g.world, drone.slot, DELAYS.length);
+  const target = sample(g.trail, drone.anchor) ?? slot;
+  const total = Math.hypot(target.x - slot.x, target.y - slot.y);
+  const gone = DRONE_SPEED * drone.stateFor;
+  if (total < 1e-6 || gone >= total) return { at: target, done: true };
+  const t = gone / total;
+  return {
+    at: { x: slot.x + (target.x - slot.x) * t, y: slot.y + (target.y - slot.y) * t },
+    done: false,
+  };
 }
 
 /** The security bay, along the left wall. */
@@ -95,7 +107,7 @@ export function dronesDue(score: number): number {
 }
 
 export const PLAYER_HIT = 0.02;
-export const DRONE_HIT = 0.02;
+export const DRONE_HIT = 0.017;
 export const GEM_HIT = 0.032;
 
 /** Drawn a little larger than they catch, so a near miss reads as a near miss. */
@@ -104,7 +116,16 @@ export const DRONE_DRAW = 0.027;
 
 /** How far behind each one reads the trail. The first hangs well back: it is
     the one that has to be understood rather than survived. */
-export const DELAYS = [2.5, 1.9, 1.5, 1.3] as const;
+export const DELAYS = [3, 2.2, 1.8, 1.5] as const;
+
+/** It drives out at a shade under your pace, so the crossing is watchable and
+    the first one cannot beat you to anywhere. */
+export const DRONE_SPEED = 0.33;
+
+/** Powering up in the cradle. The drive out then takes as long as it takes. */
+const BOOTING_S = 0.9;
+/** Scanner down on the trace, at minimum. */
+const LOCKING_S = 0.7;
 
 /** It will not start hunting while it is this close to you, however long it has
     waited. Starting on top of someone is not difficulty, it is a coin toss they
@@ -130,6 +151,8 @@ const GEM_MIN_FROM_DRONE = 0.17;
 
 export interface Game {
   phase: Phase;
+  /** Distance covered on foot, which drives the walk cycle. */
+  stride: number;
   /** Which way the comet points. Radians. */
   heading: number;
   /** Milliseconds left of the trail lighting up after a gem. */
@@ -179,14 +202,7 @@ export function droneAt(g: Game, drone: Drone): Vec | null {
   // place, so following starts without a jump.
   const start = sample(g.trail, drone.anchor) ?? drone.from;
 
-  if (drone.state === "leaving") {
-    const t = Math.min(1, drone.stateFor / stageLength(drone, "leaving"));
-    const eased = t * t * (3 - 2 * t);
-    return {
-      x: drone.from.x + (start.x - drone.from.x) * eased,
-      y: drone.from.y + (start.y - drone.from.y) * eased,
-    };
-  }
+  if (drone.state === "leaving") return driveOut(g, drone).at;
   if (drone.state === "locking") return start;
   return sample(g.trail, g.elapsed - drone.delay) ?? start;
 }
@@ -209,6 +225,7 @@ export function initial(world: Vec = { x: 1.6, y: 1 }, seed = 1): Game {
   const player = { x: world.x / 2, y: world.y / 2 };
   return {
     phase: "playing",
+    stride: 0,
     heading: 0,
     flash: 0,
     lureIn: 0.25,
@@ -357,6 +374,7 @@ export function step(g: Game, input: Input, dtMs: number): Game {
     const move = Math.min(far, pace * dt);
     next.player.x += (dx / far) * move;
     next.player.y += (dy / far) * move;
+    next.stride = g.stride + move;
   }
   next.player.x = Math.min(Math.max(next.player.x, 0.02), next.world.x - 0.02);
   next.player.y = Math.min(Math.max(next.player.y, 0.02), next.world.y - 0.02);
@@ -386,17 +404,31 @@ export function step(g: Game, input: Input, dtMs: number): Game {
   // stood in, and pausing after cheese is the most natural thing anyone does.
   next.drones = next.drones.map((drone, i) => {
     const stateFor = drone.stateFor + dt;
-    // Asleep is not a stage that times out --- only cheese ends it.
+    // Docked is not a stage that times out --- only an alarm ends it.
     if (drone.state === "docked") return { ...drone, stateFor };
-    const onward: Record<string, DroneState> = {
-      booting: "leaving",
-      leaving: "locking",
-      locking: "hunting",
-    };
-    if (drone.state !== "hunting") {
-      return stateFor < stageLength(drone, drone.state)
+
+    if (drone.state === "booting") {
+      return stateFor < BOOTING_S
         ? { ...drone, stateFor }
-        : { ...drone, state: onward[drone.state], stateFor: 0 };
+        : { ...drone, state: "leaving" as DroneState, stateFor: 0 };
+    }
+
+    if (drone.state === "leaving") {
+      // It drives; it does not appear. Arriving is what ends this stage.
+      const moving = { ...drone, stateFor };
+      return driveOut(next, moving).done
+        ? { ...drone, state: "locking" as DroneState, stateFor: 0 }
+        : moving;
+    }
+
+    if (drone.state === "locking") {
+      const behind = next.elapsed - drone.anchor;
+      // Hold until the trace under it is at least `delay` old, so a long drive
+      // out can only make the first chase gentler, never sharper. Then adopt
+      // that age: the trace it is standing on is exactly where it starts.
+      return stateFor >= LOCKING_S && behind >= drone.delay
+        ? { ...drone, state: "hunting" as DroneState, stateFor: 0, delay: behind }
+        : { ...drone, stateFor };
     }
     if (drone.live) return { ...drone, stateFor };
     const at = here[i];

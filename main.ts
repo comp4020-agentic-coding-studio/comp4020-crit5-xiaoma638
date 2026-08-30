@@ -53,7 +53,7 @@ function paint(force: boolean): void {
     ending.hidden = phase === "playing";
     // Short enough to read at a glance, and it says how it went, not how to play.
     verdict.textContent =
-      phase === "won" ? "Out clean" : phase === "lost" ? "Caught by the past" : "";
+      phase === "won" ? "OUT CLEAN" : phase === "lost" ? "DETECTED" : "";
     if (phase !== "playing") again.focus();
   }
 }

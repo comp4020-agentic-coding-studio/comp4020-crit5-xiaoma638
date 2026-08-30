@@ -130,6 +130,42 @@ function gallery(g: Game): void {
     }
   }
 
+  // Pools of light on the floor, and empty plinths between them.
+  for (const [i, at] of [0.28, 0.52, 0.78].entries()) {
+    const cx = px(world.x * at);
+    const cy = px(world.y * (i % 2 === 0 ? 0.5 : 0.32));
+    const pool = ctx.createRadialGradient(cx, cy, 0, cx, cy, px(0.3));
+    pool.addColorStop(0, "rgba(150, 190, 235, 0.05)");
+    pool.addColorStop(1, "rgba(150, 190, 235, 0)");
+    ctx.fillStyle = pool;
+    ctx.beginPath();
+    ctx.arc(cx, cy, px(0.3), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.strokeStyle = "rgba(150, 190, 235, 0.14)";
+  ctx.lineWidth = px(0.008);
+  for (const [ax, ay] of [
+    [0.46, 0.14],
+    [0.6, 0.88],
+  ] as const) {
+    ctx.strokeRect(px(world.x * ax - 0.06), px(world.y * ay - 0.045), px(0.12), px(0.09));
+    ctx.beginPath();
+    ctx.moveTo(px(world.x * ax - 0.045), px(world.y * ay - 0.045));
+    ctx.lineTo(px(world.x * ax - 0.045), px(world.y * ay - 0.085));
+    ctx.lineTo(px(world.x * ax + 0.045), px(world.y * ay - 0.085));
+    ctx.lineTo(px(world.x * ax + 0.045), px(world.y * ay - 0.045));
+    ctx.stroke();
+  }
+
+  // The way out, on the far wall.
+  ctx.strokeStyle = "rgba(82, 255, 168, 0.4)";
+  ctx.lineWidth = px(0.01);
+  const exitY = world.y * 0.5;
+  ctx.strokeRect(px(world.x) - px(0.02), px(exitY - 0.13), px(0.02), px(0.26));
+  ctx.fillStyle = "rgba(82, 255, 168, 0.09)";
+  ctx.fillRect(px(world.x) - px(0.02), px(exitY - 0.13), px(0.02), px(0.26));
+
   securityBay(g);
 }
 
@@ -171,10 +207,11 @@ function securityBay(g: Game): void {
 function trace(g: Game, from: number, to: number, lit: number): void {
   const span = to - from;
   if (span <= 0) return;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
 
+  let carried = 0;
+  let side = 1;
   let previous: { x: number; y: number; t: number } | null = null;
+
   for (const point of g.trail) {
     if (point.t < from) {
       previous = point;
@@ -182,22 +219,24 @@ function trace(g: Game, from: number, to: number, lit: number): void {
     }
     if (point.t > to) break;
     if (previous) {
-      const age = (to - point.t) / span;
-      const heat = 1 - age;
-      ctx.strokeStyle =
-        heat > 0.72
-          ? "#fff2e6"
-          : heat > 0.42
-            ? "#ffb347"
-            : heat > 0.18
-              ? "#ff6a3c"
-              : "#b02a34";
-      ctx.globalAlpha = (0.2 + lit * 0.7) * heat * heat + 0.1 * heat;
-      ctx.lineWidth = px(0.006 + heat * 0.012);
-      ctx.beginPath();
-      ctx.moveTo(px(previous.x), px(previous.y));
-      ctx.lineTo(px(point.x), px(point.y));
-      ctx.stroke();
+      const dx = point.x - previous.x;
+      const dy = point.y - previous.y;
+      const gone = Math.hypot(dx, dy);
+      carried += gone;
+      if (carried >= 0.05 && gone > 1e-6) {
+        carried = 0;
+        side = -side;
+        const heat = 1 - (to - point.t) / span;
+        // Separate prints, cooling as they go. A continuous line read as a
+        // rope tying the drone to the player, or as a beam already holding
+        // them; footfalls read as something left behind.
+        ctx.fillStyle =
+          heat > 0.72 ? "#fff1e2" : heat > 0.45 ? "#ffb347" : heat > 0.2 ? "#ff6a3c" : "#8d2530";
+        ctx.globalAlpha = (0.25 + lit * 0.6) * heat * heat + 0.12 * heat;
+        facing(px(point.x), px(point.y), Math.atan2(dy, dx), () => {
+          ellipse(0, px(0.014) * side, px(0.011), px(0.007));
+        });
+      }
     }
     previous = point;
   }
@@ -206,20 +245,52 @@ function trace(g: Game, from: number, to: number, lit: number): void {
 
 // --- the cast -------------------------------------------------------------
 
-function thief(x: number, y: number, heading: number, near: number): void {
-  ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
-  ellipse(x, y + px(0.012), px(PLAYER_DRAW) * 0.95, px(PLAYER_DRAW) * 0.4);
+function thief(x: number, y: number, heading: number, near: number, stride: number): void {
+  ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+  ellipse(x, y + px(0.013), px(PLAYER_DRAW) * 1.05, px(PLAYER_DRAW) * 0.42);
 
   facing(x, y, heading, () => {
-    const r = px(PLAYER_DRAW) * 1.3;
-    glow(THIEF, px(0.05 + near * 0.03));
-    ctx.fillStyle = THIEF;
-    // Shoulders and a head, from above.
-    ellipse(-r * 0.1, 0, r * 0.78, r * 1.0);
-    ellipse(r * 0.42, 0, r * 0.6, r * 0.6);
+    const r = px(PLAYER_DRAW) * 1.55;
+    const step = Math.sin(stride * 42) * r * 0.42;
+
+    // Feet, alternating. Small, dark, and under the body.
+    ctx.fillStyle = "#0f1c26";
+    ellipse(step, -r * 0.52, r * 0.26, r * 0.19);
+    ellipse(-step, r * 0.52, r * 0.26, r * 0.19);
+
+    // Pack on the back, then the body, then the hood: dark shapes with a
+    // rim of cyan, so the silhouette is a person and the glow is only light.
+    ctx.fillStyle = "#12222e";
+    ctx.strokeStyle = THIEF;
+    ctx.lineWidth = r * 0.13;
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    ctx.roundRect(-r * 1.15, -r * 0.46, r * 0.62, r * 0.92, r * 0.18);
+    ctx.fill();
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    glow(THIEF, px(0.03 + near * 0.03));
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.12, 0, r * 0.74, r * 0.62, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "#12222e";
+    ctx.fill();
+    ctx.stroke();
     clearGlow();
-    ctx.fillStyle = "#dffbff";
-    ellipse(r * 0.5, 0, r * 0.26, r * 0.26);
+
+    ctx.beginPath();
+    ctx.arc(r * 0.52, 0, r * 0.48, 0, Math.PI * 2);
+    ctx.fillStyle = "#0b1620";
+    ctx.fill();
+    ctx.stroke();
+
+    // The eye slit in the mask.
+    ctx.strokeStyle = "#dffbff";
+    ctx.lineWidth = r * 0.14;
+    ctx.beginPath();
+    ctx.moveTo(r * 0.78, -r * 0.2);
+    ctx.lineTo(r * 0.78, r * 0.2);
+    ctx.stroke();
   });
 }
 
@@ -383,7 +454,7 @@ export function draw(g: Game, reduced: boolean): void {
     const near = g.gem
       ? Math.max(0, 1 - Math.hypot(g.player.x - g.gem.x, g.player.y - g.gem.y) / 0.28)
       : 0;
-    thief(px(g.player.x), px(g.player.y), g.heading, near);
+    thief(px(g.player.x), px(g.player.y), g.heading, near, g.stride);
   } else {
     const age = Math.min(1, (g.elapsed - g.endedAt) / 0.5);
     ctx.strokeStyle = ALERT;
