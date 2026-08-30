@@ -44,7 +44,7 @@ main {
 }
 
 #board:focus-visible {
-  outline: 1px solid rgba(103, 245, 255, 0.35);
+  outline: 1px solid rgba(170, 197, 222, 0.35);
   outline-offset: -1px;
 }
 
@@ -96,19 +96,17 @@ nav a:focus-visible {
   pointer-events: none;
 }
 
+/* Eight wedges of cheese, filling in as they are eaten. */
 #tally li {
-  width: 0.46rem;
-  height: 0.46rem;
-  border-radius: 50%;
+  width: 0.62rem;
+  height: 0.54rem;
+  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
   background: rgba(125, 136, 176, 0.22);
-  transition:
-    background 260ms ease,
-    box-shadow 260ms ease;
+  transition: background 260ms ease;
 }
 
 #tally li.on {
-  background: var(--star);
-  box-shadow: 0 0 8px rgba(255, 209, 102, 0.75);
+  background: var(--cheese);
 }
 
 /* --- the ending --------------------------------------------------------- */
@@ -143,7 +141,7 @@ nav a:focus-visible {
 }
 
 :root[data-phase="won"] #verdict {
-  color: var(--star);
+  color: var(--cheese);
   text-shadow: 0 0 30px rgba(255, 209, 102, 0.45);
 }
 
@@ -164,6 +162,6 @@ nav a:focus-visible {
 
 #again:hover,
 #again:focus-visible {
-  border-color: rgba(103, 245, 255, 0.7);
-  background: rgba(103, 245, 255, 0.1);
+  border-color: rgba(170, 197, 222, 0.75);
+  background: rgba(170, 197, 222, 0.12);
 }

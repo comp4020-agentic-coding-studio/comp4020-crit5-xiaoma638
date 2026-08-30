@@ -17,14 +17,36 @@ export interface TrailPoint {
   t: number;
 }
 
-export interface Shade {
+/** A cat arrives in stages, and none of the early ones can touch you: eyes at
+    the edge first, then it comes in, then its nose goes down on the prints ---
+    only after all that does it start following them. */
+export type CatState = "looming" | "entering" | "sniffing" | "tracking";
+
+export interface Cat {
   id: number;
-  /** Seconds it walks behind you. */
+  /** Seconds behind you it reads the trail. */
   delay: number;
-  /** Earliest it may wake. Time alone is not enough --- see `step`. */
-  wakeAt: number;
+  state: CatState;
+  /** Seconds spent in the current stage. */
+  stateFor: number;
+  /** Elapsed time when it was sent. The prints it will follow start here. */
+  anchor: number;
+  /** Just off the edge, where it comes in from. */
+  from: Vec;
   /** True once it can actually catch you. */
   live: boolean;
+}
+
+// Arriving takes exactly as long as the cat runs behind you, split three ways.
+// That is not decoration: it means the moment its nose comes up, the prints it
+// has been standing over are the ones it starts to follow, with no jump.
+const LOOMING = 0.42;
+const ENTERING = 0.24;
+const SNIFFING = 0.34;
+
+export function stageLength(cat: Cat, state: CatState): number {
+  const share = state === "looming" ? LOOMING : state === "entering" ? ENTERING : SNIFFING;
+  return cat.delay * share;
 }
 
 export interface Star {
@@ -56,38 +78,44 @@ export interface Ring {
 export type Phase = "playing" | "lost" | "won";
 
 export const WIN_AT = 8;
-/** One more of them for every two you take. */
-export const STAR_PER_SHADE = 2;
+/** How many cats belong at a given count: the first after one piece of cheese,
+    then another every second piece after that. */
+export function catsDue(score: number): number {
+  return score < 1 ? 0 : Math.min(DELAYS.length, 1 + Math.floor((score - 1) / 2));
+}
 
 export const PLAYER_HIT = 0.02;
-export const SHADE_HIT = 0.02;
+export const CAT_HIT = 0.02;
 export const STAR_HIT = 0.032;
 
 /** Drawn a little larger than they catch, so a near miss reads as a near miss. */
 export const PLAYER_DRAW = 0.027;
-export const SHADE_DRAW = 0.027;
+export const CAT_DRAW = 0.027;
 
-/** How far behind each one runs. The first hangs well back, because it is the
-    one that has to be understood rather than survived; later ones crowd in. */
-export const DELAYS = [2.2, 1.5, 1.3, 1.15] as const;
+/** How far behind each one reads the trail. The first hangs well back: it is
+    the one that has to be understood rather than survived. */
+export const DELAYS = [2.5, 1.9, 1.5, 1.3] as const;
 
-/** A shade is visible, and harmless, for this long before it can wake. */
-const ARM_MS = 1000;
+/** It will not start hunting while it is this close to you, however long it has
+    waited. Starting on top of someone is not difficulty, it is a coin toss they
+    lose. */
+export const SAFE_WAKE = 0.17;
 
-/** And it will not wake while it is this close to you, however long it waits.
-    Waking on top of someone is not difficulty, it is a coin toss they lose. */
-export const SAFE_WAKE = 0.15;
-
-/** Exponential follow: firm, but not glued to the cursor. */
-const FOLLOW = 13;
+/** A mouse runs; it does not teleport. Chasing the cursor at a fixed pace is
+    what gives distance a cost and dodging a technique --- glued to the pointer,
+    any cat can be escaped by flicking the wrist, and the round is over in
+    seconds because crossing the room is free. */
+const RUN = 0.42;
+/** Eases to a stop inside this, so it settles instead of jittering. */
+const ARRIVE = 0.05;
 
 const TRAIL_KEEP_MS = 2600;
 const MAX_PARTICLES = 180;
 const MAX_RINGS = 12;
 
 const STAR_MARGIN = 0.13;
-const STAR_MIN_FROM_PLAYER = 0.26;
-const STAR_MAX_FROM_PLAYER = 0.78;
+const STAR_MIN_FROM_PLAYER = 0.34;
+const STAR_MAX_FROM_PLAYER = 0.95;
 const STAR_MIN_FROM_SHADE = 0.17;
 
 export interface Game {
@@ -98,12 +126,12 @@ export interface Game {
   flash: number;
   /** Seconds until the star throws another thread towards the player. */
   lureIn: number;
-  /** Seconds of play. Pausing stops this, so the shades stay in step. */
+  /** Seconds of play. Pausing stops this, so the cats stay in step. */
   elapsed: number;
   player: Vec;
   target: Vec;
   trail: TrailPoint[];
-  shades: Shade[];
+  cats: Cat[];
   star: Star | null;
   score: number;
   particles: Particle[];
@@ -130,9 +158,35 @@ function random(seed: number): [number, number] {
   return [s / 0x100000000, s];
 }
 
-/** Where a shade is right now: where you were, `delay` seconds ago. */
-export function shadeAt(g: Game, shade: Shade): Vec | null {
-  return sample(g.trail, g.elapsed - shade.delay);
+/** Where a cat is on screen, through all four stages of arriving. */
+export function catAt(g: Game, cat: Cat): Vec | null {
+  if (cat.state === "looming") return cat.from;
+
+  // Where the prints it was sent for begin. It walks to that spot and waits
+  // over it; by the time it looks up, the trail has caught up to the same
+  // place, so following starts without a jump.
+  const start = sample(g.trail, cat.anchor) ?? cat.from;
+
+  if (cat.state === "entering") {
+    const t = Math.min(1, cat.stateFor / stageLength(cat, "entering"));
+    const eased = t * t * (3 - 2 * t);
+    return {
+      x: cat.from.x + (start.x - cat.from.x) * eased,
+      y: cat.from.y + (start.y - cat.from.y) * eased,
+    };
+  }
+  if (cat.state === "sniffing") return start;
+  return sample(g.trail, g.elapsed - cat.delay) ?? start;
+}
+
+/** Just off whichever edge is nearest, so it comes in from the room. */
+function edgeNear(p: Vec, world: Vec): Vec {
+  const gaps = [p.x, world.x - p.x, p.y, world.y - p.y];
+  const nearest = Math.min(...gaps);
+  if (nearest === gaps[0]) return { x: -0.07, y: p.y };
+  if (nearest === gaps[1]) return { x: world.x + 0.07, y: p.y };
+  if (nearest === gaps[2]) return { x: p.x, y: -0.07 };
+  return { x: p.x, y: world.y + 0.07 };
 }
 
 /** The trail, read at a moment in time. Null before the trail reaches back. */
@@ -160,9 +214,8 @@ export function initial(world: Vec = { x: 1.6, y: 1 }, seed = 1): Game {
     player: { ...player },
     target: { ...player },
     trail: [{ x: player.x, y: player.y, t: 0 }],
-    // One from the start. It cannot reach you until the trail is long enough,
-    // which is the pause that lets the first star be taken in peace.
-    shades: [{ id: 1, delay: DELAYS[0], wakeAt: DELAYS[0] + ARM_MS / 1000, live: false }],
+    // None yet. Nothing hunts you until you have taken something.
+    cats: [],
     // Close enough that it is taken almost by accident, which is the lesson.
     star: { x: player.x + 0.19, y: player.y - 0.1, born: 0 },
     score: 0,
@@ -176,7 +229,7 @@ export function initial(world: Vec = { x: 1.6, y: 1 }, seed = 1): Game {
   };
 }
 
-function placeStar(g: Game, shades: Vec[]): [Star, number] {
+function placeStar(g: Game, cats: Vec[]): [Star, number] {
   let seed = g.seed;
   let best: Star | null = null;
   let bestScore = -1;
@@ -194,16 +247,15 @@ function placeStar(g: Game, shades: Vec[]): [Star, number] {
     if (fromPlayer < STAR_MIN_FROM_PLAYER || fromPlayer > STAR_MAX_FROM_PLAYER) continue;
 
     let nearestShade = Infinity;
-    for (const s of shades) nearestShade = Math.min(nearestShade, Math.hypot(x - s.x, y - s.y));
+    for (const s of cats) nearestShade = Math.min(nearestShade, Math.hypot(x - s.x, y - s.y));
     if (nearestShade < STAR_MIN_FROM_SHADE) continue;
 
-    // Among the legal spots, prefer the one standing clearest of the shades:
-    // reachable is not enough, it has to be worth crossing to.
-    const score = Math.min(nearestShade, 1.2);
-    if (score > bestScore) {
-      bestScore = score;
-      best = { x, y, born: g.elapsed };
-    }
+    // The first spot that clears the guards, not the safest one on the board.
+    // Preferring the safest quietly routed every trip around the danger, which
+    // is the opposite of a game about ground you have already covered.
+    best = { x, y, born: g.elapsed };
+    bestScore = 1;
+    break;
   }
 
   if (!best) {
@@ -261,7 +313,7 @@ export function step(g: Game, input: Input, dtMs: number): Game {
     target: { ...g.target },
     world: input.world ? { ...input.world } : { ...g.world },
     trail: g.trail,
-    shades: g.shades,
+    cats: g.cats,
     particles: g.particles.map((p) => ({ ...p })),
     rings: g.rings.map((r) => ({ ...r })),
   };
@@ -285,10 +337,15 @@ export function step(g: Game, input: Input, dtMs: number): Game {
   next.elapsed = g.elapsed + dt;
   if (input.target) next.target = { ...input.target };
 
-  // Firm follow, frame-rate independent.
-  const k = 1 - Math.exp(-FOLLOW * dt);
-  next.player.x += (next.target.x - next.player.x) * k;
-  next.player.y += (next.target.y - next.player.y) * k;
+  const dx = next.target.x - next.player.x;
+  const dy = next.target.y - next.player.y;
+  const far = Math.hypot(dx, dy);
+  if (far > 1e-6) {
+    const pace = RUN * Math.min(1, far / ARRIVE);
+    const move = Math.min(far, pace * dt);
+    next.player.x += (dx / far) * move;
+    next.player.y += (dy / far) * move;
+  }
   next.player.x = Math.min(Math.max(next.player.x, 0.02), next.world.x - 0.02);
   next.player.y = Math.min(Math.max(next.player.y, 0.02), next.world.y - 0.02);
 
@@ -307,26 +364,38 @@ export function step(g: Game, input: Input, dtMs: number): Game {
   while (drop + 1 < trail.length && trail[drop + 1].t < cutoff) drop++;
   next.trail = drop > 0 ? trail.slice(drop) : trail;
 
-  const here = next.shades
-    .map((s) => shadeAt(next, s))
+  const here = next.cats
+    .map((s) => catAt(next, s))
     .filter((p): p is Vec => p !== null);
 
-  // A shade wakes when its time is up AND it is clear of you. Standing still
-  // after a star is the most natural thing anyone does, and the old rule armed
-  // whatever happened to be retracing that exact spot straight into them.
-  next.shades = next.shades.map((shade, i) => {
-    if (shade.live) return shade;
+  // Each cat walks its arrival forward. Nothing before "tracking" can touch
+  // anyone, and tracking itself waits until the cat is clear of the player: a
+  // cat reads the prints exactly, so the spot it is on is a spot the player
+  // stood in, and pausing after cheese is the most natural thing anyone does.
+  next.cats = next.cats.map((cat, i) => {
+    const stateFor = cat.stateFor + dt;
+    const onward: Record<string, CatState> = {
+      looming: "entering",
+      entering: "sniffing",
+      sniffing: "tracking",
+    };
+    if (cat.state !== "tracking") {
+      return stateFor < stageLength(cat, cat.state)
+        ? { ...cat, stateFor }
+        : { ...cat, state: onward[cat.state], stateFor: 0 };
+    }
+    if (cat.live) return { ...cat, stateFor };
     const at = here[i];
-    if (!at || next.elapsed < shade.wakeAt) return shade;
+    if (!at) return { ...cat, stateFor };
     const gap = Math.hypot(at.x - next.player.x, at.y - next.player.y);
-    return gap < SAFE_WAKE ? shade : { ...shade, live: true };
+    return gap < SAFE_WAKE ? { ...cat, stateFor } : { ...cat, stateFor, live: true };
   });
 
   // Caught by where you have already been.
-  for (const [i, shade] of next.shades.entries()) {
+  for (const [i, cat] of next.cats.entries()) {
     const at = here[i];
-    if (!at || !shade.live) continue;
-    if (overlaps(next.player, PLAYER_HIT, at, SHADE_HIT)) {
+    if (!at || !cat.live) continue;
+    if (overlaps(next.player, PLAYER_HIT, at, CAT_HIT)) {
       next.phase = "lost";
       next.endedAt = next.elapsed;
       burst(next, next.player, "caught", 26);
@@ -384,13 +453,17 @@ export function step(g: Game, input: Input, dtMs: number): Game {
       return next;
     }
 
-    if (next.score % STAR_PER_SHADE === 0 && next.shades.length < DELAYS.length) {
-      next.shades = [
-        ...next.shades,
+    if (next.cats.length < catsDue(next.score)) {
+      const delay = DELAYS[next.cats.length];
+      next.cats = [
+        ...next.cats,
         {
           id: next.nextId++,
-          delay: DELAYS[next.shades.length],
-          wakeAt: next.elapsed + ARM_MS / 1000,
+          delay,
+          state: "looming",
+          stateFor: 0,
+          anchor: next.elapsed,
+          from: edgeNear(next.player, next.world),
           live: false,
         },
       ];

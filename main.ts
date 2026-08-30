@@ -53,7 +53,7 @@ function paint(force: boolean): void {
     ending.hidden = phase === "playing";
     // Short enough to read at a glance, and it says how it went, not how to play.
     verdict.textContent =
-      phase === "won" ? "Present" : phase === "lost" ? "Caught by the past" : "";
+      phase === "won" ? "Home free" : phase === "lost" ? "Caught by the past" : "";
     if (phase !== "playing") again.focus();
   }
 }
@@ -104,7 +104,7 @@ new ResizeObserver(() => {
   draw(game, calm.matches);
 }).observe(board);
 
-// Away is paused: the shades are one clock behind you, and a tab that keeps
+// Away is paused: the cats are one clock behind you, and a tab that keeps
 // running while nobody is watching would hand them the round.
 function setRunning(on: boolean): void {
   running = on;

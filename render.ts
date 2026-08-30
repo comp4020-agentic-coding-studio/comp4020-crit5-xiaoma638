@@ -5,20 +5,25 @@
 // number that turns the game into pixels.
 
 import {
-  PLAYER_DRAW,
+  catAt,
+  CAT_DRAW,
+    PLAYER_DRAW,
   sample,
-  SHADE_DRAW,
-  shadeAt,
   STAR_HIT,
+  type Cat,
   type Game,
-  type Shade,
   type Vec,
 } from "./logic.ts";
 
-const INK = "#070814";
-const PLAYER = "#67f5ff";
-const SHADE = "#ff647c";
-const STAR = "#ffd166";
+const FLOOR = "#0d0b17";
+const TILE = "rgba(190, 210, 255, 0.035)";
+const PROP = "rgba(190, 210, 255, 0.055)";
+const MOUSE = "#aac5de";
+const MOUSE_EAR = "#8ba7c4";
+const NOSE = "#ff9fb5";
+const CHEESE = "#ffd166";
+const CAT = "#ff647c";
+const PRINT = "rgba(170, 197, 222, 0.5)";
 
 const canvas = document.getElementById("board") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
@@ -30,7 +35,6 @@ let dpr = 1;
 let left = 0;
 let top = 0;
 
-/** Measure the board and return its shape in short-side units. */
 export function resize(): Vec {
   const rect = canvas.getBoundingClientRect();
   cssW = rect.width || 1;
@@ -62,59 +66,74 @@ function clearGlow(): void {
   ctx.shadowBlur = 0;
 }
 
-/** A comet: a round head facing `heading`, drawn back into a tail. The shades
-    wear the same shape, because a shade is not a monster --- it is a copy of
-    you, and the silhouette is what says so. */
-function comet(x: number, y: number, heading: number, r: number, tail: number): void {
+function facing(x: number, y: number, heading: number, draw: () => void): void {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(heading);
-  ctx.beginPath();
-  ctx.arc(0, 0, r, -Math.PI / 2, Math.PI / 2);
-  ctx.quadraticCurveTo(-tail * 0.45, r * 0.62, -tail, 0);
-  ctx.quadraticCurveTo(-tail * 0.45, -r * 0.62, 0, -r);
-  ctx.closePath();
+  draw();
   ctx.restore();
 }
 
-/** Which way a shade is facing: the direction you were going back then. */
-function shadeHeading(g: Game, shade: Shade): number {
-  const t = g.elapsed - shade.delay;
-  const before = sample(g.trail, t - 0.07);
-  const now = sample(g.trail, t);
-  if (!before || !now) return 0;
-  const dx = now.x - before.x;
-  const dy = now.y - before.y;
-  return dx * dx + dy * dy < 1e-8 ? 0 : Math.atan2(dy, dx);
-}
-
-/** A four-pointed sparkle, drawn with concave sides. */
-function sparkle(x: number, y: number, r: number): void {
+function ellipse(x: number, y: number, rx: number, ry: number): void {
   ctx.beginPath();
-  ctx.moveTo(x, y - r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.quadraticCurveTo(x, y, x, y + r);
-  ctx.quadraticCurveTo(x, y, x - r, y);
-  ctx.quadraticCurveTo(x, y, x, y - r);
-  ctx.closePath();
+  ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
 }
 
-function ribbon(
-  g: Game,
-  from: number,
-  to: number,
-  color: string,
-  width: number,
-  peak: number,
-): void {
+// --- the room -------------------------------------------------------------
+
+/** A dark floor with a few things standing on it. Drawn from world size, so it
+    re-lays itself on a rotation instead of sliding off the edge. */
+function room(world: Vec): void {
+  ctx.fillStyle = FLOOR;
+  ctx.fillRect(0, 0, cssW, cssH);
+
+  ctx.strokeStyle = TILE;
+  ctx.lineWidth = 1;
+  const tile = 0.26;
+  ctx.beginPath();
+  for (let x = 0; x <= world.x + tile; x += tile) {
+    ctx.moveTo(px(x), 0);
+    ctx.lineTo(px(x), cssH);
+  }
+  for (let y = 0; y <= world.y + tile; y += tile) {
+    ctx.moveTo(0, px(y));
+    ctx.lineTo(cssW, px(y));
+  }
+  ctx.stroke();
+
+  ctx.strokeStyle = PROP;
+  ctx.lineWidth = px(0.008);
+  // A table in one corner, a carton in the other. Outlines only: the room is
+  // scenery, and the round has to stay readable across it.
+  const legs: Vec[] = [
+    { x: world.x * 0.12, y: world.y * 0.14 },
+    { x: world.x * 0.12, y: world.y * 0.86 },
+  ];
+  for (const leg of legs) {
+    ctx.strokeRect(px(leg.x - 0.035), px(leg.y - 0.09), px(0.07), px(0.18));
+  }
+  ctx.strokeRect(px(world.x * 0.82), px(world.y * 0.7), px(0.22), px(0.17));
+  ctx.beginPath();
+  ctx.moveTo(px(world.x * 0.82), px(world.y * 0.7));
+  ctx.lineTo(px(world.x * 0.82 + 0.05), px(world.y * 0.7 - 0.05));
+  ctx.lineTo(px(world.x * 0.82 + 0.27), px(world.y * 0.7 - 0.05));
+  ctx.lineTo(px(world.x * 0.82 + 0.22), px(world.y * 0.7));
+  ctx.stroke();
+}
+
+// --- what the mouse leaves behind ----------------------------------------
+
+/** Paw prints, laid at a steady spacing along the trail and fading out. This
+    is the thing a cat follows, so it has to be legible on its own. */
+function prints(g: Game, from: number, to: number, lit: number): void {
   const span = to - from;
   if (span <= 0) return;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  ctx.strokeStyle = color;
-  ctx.lineWidth = px(width);
 
+  let carried = 0;
   let previous: { x: number; y: number; t: number } | null = null;
+  let side = 1;
+
   for (const point of g.trail) {
     if (point.t < from) {
       previous = point;
@@ -122,31 +141,144 @@ function ribbon(
     }
     if (point.t > to) break;
     if (previous) {
-      const age = (to - point.t) / span;
-      ctx.globalAlpha = peak * (1 - age) * (1 - age);
-      ctx.beginPath();
-      ctx.moveTo(px(previous.x), px(previous.y));
-      ctx.lineTo(px(point.x), px(point.y));
-      ctx.stroke();
+      const dx = point.x - previous.x;
+      const dy = point.y - previous.y;
+      const gone = Math.hypot(dx, dy);
+      carried += gone;
+      if (carried >= 0.042 && gone > 1e-6) {
+        carried = 0;
+        side = -side;
+        const heading = Math.atan2(dy, dx);
+        const age = (to - point.t) / span;
+        ctx.globalAlpha = (0.15 + lit * 0.75) * (1 - age) * (1 - age) + 0.06 * (1 - age);
+        ctx.fillStyle = PRINT;
+        facing(px(point.x), px(point.y), heading, () => {
+          const off = px(0.016) * side;
+          ellipse(0, off, px(0.009), px(0.006));
+          ellipse(px(0.011), off + px(0.006) * side, px(0.0035), px(0.003));
+          ellipse(px(0.009), off - px(0.007) * side, px(0.0035), px(0.003));
+        });
+      }
     }
     previous = point;
   }
   ctx.globalAlpha = 1;
 }
 
+// --- the cast -------------------------------------------------------------
+
+function mouse(x: number, y: number, heading: number, sniff: number): void {
+  facing(x, y, heading, () => {
+    const r = px(PLAYER_DRAW);
+
+    ctx.strokeStyle = MOUSE_EAR;
+    ctx.lineWidth = px(0.004);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.9, 0);
+    ctx.quadraticCurveTo(-r * 2.4, -r * 0.5, -r * 3.1, r * 0.5);
+    ctx.stroke();
+
+    ctx.fillStyle = MOUSE_EAR;
+    ellipse(-r * 0.1, -r * 0.85, r * 0.42, r * 0.42);
+    ellipse(-r * 0.1, r * 0.85, r * 0.42, r * 0.42);
+
+    ctx.fillStyle = MOUSE;
+    ellipse(-r * 0.15, 0, r * 1.15, r * 0.85);
+    ellipse(r * 0.75, 0, r * 0.62, r * 0.55);
+
+    // The nose twitches when cheese is close.
+    ctx.fillStyle = NOSE;
+    ellipse(r * (1.3 + sniff * 0.08), 0, r * 0.17, r * 0.15);
+  });
+}
+
+function cat(x: number, y: number, heading: number, filled: boolean, alpha: number): void {
+  facing(x, y, heading, () => {
+    const r = px(CAT_DRAW) * 1.7; // plainly bigger than the mouse
+    const dash: [number, number] = [px(0.021), px(0.015)];
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = CAT;
+
+    ctx.lineWidth = px(0.008);
+    if (!filled) ctx.setLineDash(dash);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.8, -r * 0.1);
+    ctx.quadraticCurveTo(-r * 2.1, -r * 0.95, -r * 2.35, r * 0.35);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Body, head and both ears as one outline, so the arriving cat is the
+    // same animal as the hunting one and not two anonymous blobs.
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.2, 0, r * 1.05, r * 0.72, 0, 0, Math.PI * 2);
+    ctx.moveTo(r * 1.47, 0);
+    ctx.ellipse(r * 0.85, 0, r * 0.62, r * 0.58, 0, 0, Math.PI * 2);
+    ctx.moveTo(r * 0.5, -r * 0.44);
+    ctx.lineTo(r * 0.6, -r * 1.12);
+    ctx.lineTo(r * 1.06, -r * 0.52);
+    ctx.moveTo(r * 0.5, r * 0.44);
+    ctx.lineTo(r * 0.6, r * 1.12);
+    ctx.lineTo(r * 1.06, r * 0.52);
+
+    if (filled) {
+      glow(CAT, px(0.05));
+      ctx.fillStyle = CAT;
+      ctx.fill();
+      clearGlow();
+      ctx.fillStyle = "#2a0b12";
+      ellipse(r * 1.12, -r * 0.24, r * 0.11, r * 0.18);
+      ellipse(r * 1.12, r * 0.24, r * 0.11, r * 0.18);
+    } else {
+      ctx.lineWidth = px(0.005);
+      ctx.setLineDash(dash);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.globalAlpha = 1;
+  });
+}
+
+/** Two eyes in the dark, before anything else of it is visible. */
+function eyes(x: number, y: number, heading: number, pulse: number): void {
+  facing(x, y, heading, () => {
+    const r = px(CAT_DRAW) * 1.7;
+    ctx.globalAlpha = 0.5 + pulse * 0.5;
+    ctx.fillStyle = CAT;
+    glow(CAT, px(0.05));
+    ellipse(0, -r * 0.26, r * 0.16, r * 0.2);
+    ellipse(0, r * 0.26, r * 0.16, r * 0.2);
+    clearGlow();
+    ctx.globalAlpha = 1;
+  });
+}
+
+function cheese(x: number, y: number, wobble: number): void {
+  facing(x, y, wobble * 0.14, () => {
+    const r = px(STAR_HIT) * 1.5;
+    glow(CHEESE, px(0.045));
+    ctx.fillStyle = CHEESE;
+    ctx.beginPath();
+    ctx.moveTo(0, -r);
+    ctx.lineTo(r * 0.95, r * 0.7);
+    ctx.lineTo(-r * 0.95, r * 0.7);
+    ctx.closePath();
+    ctx.fill();
+    clearGlow();
+    ctx.fillStyle = "rgba(120, 82, 10, 0.75)";
+    ellipse(0, r * 0.16, r * 0.19, r * 0.19);
+    ellipse(-r * 0.4, r * 0.46, r * 0.13, r * 0.13);
+    ellipse(r * 0.42, r * 0.42, r * 0.11, r * 0.11);
+  });
+}
+
 export function draw(g: Game, reduced: boolean): void {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = INK;
-  ctx.fillRect(0, 0, cssW, cssH);
+  room(g.world);
 
   if (g.shake > 0 && !reduced) {
-    // Derived from the clock, so a redraw of the same state looks the same.
     const decay = g.shake / 420;
     const amount = px(0.012) * decay;
-    ctx.translate(
-      Math.sin(g.elapsed * 92) * amount,
-      Math.cos(g.elapsed * 77) * amount,
-    );
+    ctx.translate(Math.sin(g.elapsed * 92) * amount, Math.cos(g.elapsed * 77) * amount);
   }
 
   if (g.phase === "lost") {
@@ -154,94 +286,79 @@ export function draw(g: Game, reduced: boolean): void {
     ctx.fillRect(-cssW, -cssH, cssW * 3, cssH * 3);
   }
 
-  // Where they are walking: the same trail, read further back.
-  for (const shade of g.shades) {
-    const t = g.elapsed - shade.delay;
-    ribbon(g, t - 0.38, t, SHADE, 0.014, shade.live ? 0.42 : 0.2);
-  }
-  // After a star the whole route lights up, a beat before something starts
-  // walking it. That pairing is the only teaching this game gets to do.
+  // After cheese the fresh prints light up, a beat before a cat puts its nose
+  // down on them. That pairing is the only teaching this game gets to do.
   const lit = g.flash > 0 ? Math.min(1, g.flash / 700) : 0;
-  ribbon(g, g.elapsed - 0.7 - lit * 1.6, g.elapsed, PLAYER, 0.018 + lit * 0.006, 0.8 + lit * 0.2);
+  // Long enough that every cat is standing on prints it can be seen reading.
+  // A cat walking over bare floor is just a cat coming at you; the prints are
+  // what make it a consequence.
+  prints(g, g.elapsed - 3, g.elapsed, lit);
 
   if (g.star) {
     const age = g.elapsed - g.star.born;
-    // Rings going out on a slow pulse: something with a pull, not a decoration.
-    for (let i = 0; i < 2; i++) {
-      const wave = ((age * 0.75 + i * 0.5) % 1);
-      ctx.strokeStyle = STAR;
-      ctx.globalAlpha = (1 - wave) * 0.3;
-      ctx.lineWidth = px(0.004);
+    // Scent, drifting off it.
+    ctx.strokeStyle = CHEESE;
+    ctx.lineWidth = px(0.004);
+    for (let i = 0; i < 3; i++) {
+      const rise = (age * 0.5 + i * 0.34) % 1;
+      ctx.globalAlpha = (1 - rise) * 0.28;
       ctx.beginPath();
-      ctx.arc(px(g.star.x), px(g.star.y), px(0.03 + wave * 0.1), 0, Math.PI * 2);
+      const sx = px(g.star.x) + px(0.02) * (i - 1);
+      const sy = px(g.star.y) - px(0.05) - px(0.09) * rise;
+      ctx.moveTo(sx, sy);
+      ctx.quadraticCurveTo(sx + px(0.022), sy - px(0.03), sx, sy - px(0.06));
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
-
-    const beat = 1 + Math.sin(age * 4.6) * 0.11;
-    glow(STAR, px(0.06));
-    ctx.fillStyle = STAR;
-    sparkle(px(g.star.x), px(g.star.y), px(STAR_HIT * 1.2 * beat));
-    ctx.fill();
-    clearGlow();
+    cheese(px(g.star.x), px(g.star.y), Math.sin(age * 3.1));
   }
 
-  for (const shade of g.shades) {
-    const at = shadeAt(g, shade);
+  for (const c of g.cats) {
+    const at = catAt(g, c);
     if (!at) continue;
-    // Fades up while it is still harmless, so nothing arrives without warning.
-    const arming = Math.min(1, Math.max(0, (g.elapsed - (shade.wakeAt - 1)) / 1));
-    const live = shade.live;
-    // Outline only until it wakes, then filled: the same shape as the player,
-    // in red, so it reads as a copy rather than as something that wandered in.
-    comet(px(at.x), px(at.y), shadeHeading(g, shade), px(SHADE_DRAW), px(0.07));
-    if (live) {
-      ctx.globalAlpha = 0.82;
-      glow(SHADE, px(0.055));
-      ctx.fillStyle = SHADE;
-      ctx.fill();
-    } else {
-      ctx.globalAlpha = 0.3 + arming * 0.45;
-      ctx.strokeStyle = SHADE;
-      ctx.lineWidth = px(0.005);
-      ctx.setLineDash([px(0.02), px(0.014)]);
-      ctx.stroke();
-      ctx.setLineDash([]);
+    const t = g.elapsed - c.delay;
+    const before = sample(g.trail, t - 0.09);
+    const now = sample(g.trail, t);
+    let heading = 0;
+    if (before && now) {
+      const dx = now.x - before.x;
+      const dy = now.y - before.y;
+      if (dx * dx + dy * dy > 1e-8) heading = Math.atan2(dy, dx);
     }
-    clearGlow();
-    ctx.globalAlpha = 1;
+    if (c.state === "looming") {
+      // Facing into the room, so the eyes read as looking at you.
+      const inward = Math.atan2(g.world.y / 2 - at.y, g.world.x / 2 - at.x);
+      eyes(px(at.x), px(at.y), inward, Math.abs(Math.sin(c.stateFor * 3.4)));
+      continue;
+    }
+    if (c.state === "entering") {
+      const t2 = Math.min(1, c.stateFor / (c.delay * 0.24));
+      cat(px(at.x), px(at.y), heading, false, 0.35 + t2 * 0.4);
+      continue;
+    }
+    if (c.state === "sniffing") {
+      // Nose to the floor: a beat that says what it is about to do.
+      const dip = Math.sin(c.stateFor * 7) * 0.1;
+      cat(px(at.x), px(at.y) + px(0.008), heading + dip, false, 0.85);
+      continue;
+    }
+    cat(px(at.x), px(at.y), heading, true, c.live ? 1 : 0.8);
   }
 
   if (g.phase !== "lost") {
-    // Brighter the closer the star is: the comet reacts to it before you do.
     const near = g.star
-      ? Math.max(0, 1 - Math.hypot(g.player.x - g.star.x, g.player.y - g.star.y) / 0.3)
+      ? Math.max(0, 1 - Math.hypot(g.player.x - g.star.x, g.player.y - g.star.y) / 0.28)
       : 0;
-    glow(PLAYER, px(0.07 + near * 0.05));
-    ctx.fillStyle = PLAYER;
-    comet(px(g.player.x), px(g.player.y), g.heading, px(PLAYER_DRAW), px(0.075 + near * 0.03));
-    ctx.fill();
-    clearGlow();
-    ctx.fillStyle = "#eafeff";
-    ctx.beginPath();
-    ctx.arc(px(g.player.x), px(g.player.y), px(PLAYER_DRAW * 0.44), 0, Math.PI * 2);
-    ctx.fill();
+    mouse(px(g.player.x), px(g.player.y), g.heading, near * Math.abs(Math.sin(g.elapsed * 11)));
   } else {
-    // A ring that came apart where you were caught.
     const age = Math.min(1, (g.elapsed - g.endedAt) / 0.5);
-    ctx.strokeStyle = SHADE;
+    ctx.strokeStyle = CAT;
     ctx.globalAlpha = 1 - age * 0.55;
     ctx.lineWidth = px(0.006);
     for (let i = 0; i < 5; i++) {
       const from = (i / 5) * Math.PI * 2 + age * 0.5;
       ctx.beginPath();
-      ctx.arc(
-        px(g.player.x),
-        px(g.player.y),
-        px(PLAYER_DRAW + age * 0.03),
-        from,
-        from + 0.7,
-      );
+      ctx.arc(px(g.player.x), px(g.player.y), px(PLAYER_DRAW + age * 0.03), from, from + 0.7);
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
@@ -249,7 +366,7 @@ export function draw(g: Game, reduced: boolean): void {
 
   for (const ring of g.rings) {
     const age = 1 - ring.life / ring.max;
-    ctx.strokeStyle = ring.kind === "caught" ? SHADE : STAR;
+    ctx.strokeStyle = ring.kind === "caught" ? CAT : CHEESE;
     ctx.globalAlpha = (1 - age) * 0.7;
     ctx.lineWidth = px(0.005);
     ctx.beginPath();
@@ -262,7 +379,7 @@ export function draw(g: Game, reduced: boolean): void {
   for (let i = 0; i < shown; i++) {
     const p = g.particles[i];
     ctx.globalAlpha = Math.max(0, p.life / p.max) * 0.9;
-    ctx.fillStyle = p.kind === "caught" ? SHADE : STAR;
+    ctx.fillStyle = p.kind === "caught" ? CAT : CHEESE;
     ctx.beginPath();
     ctx.arc(px(p.x), px(p.y), px(p.kind === "lure" ? 0.0035 : 0.005), 0, Math.PI * 2);
     ctx.fill();
