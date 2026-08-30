@@ -66,6 +66,33 @@ the radii reads as a **miss**. The tests pin all four cases --- clear overlap,
 clear separation, the exact graze, and a hair either side of it --- because
 that one call is what makes a fast pass feel fair rather than cheap.
 
+### 5. The change that came from playing it
+
+Everything above was reasoned. This one was played.
+
+Opened cold and moved to the first star, the round was over in about a second
+and a half: take the star, pause to look for the next one, and something red
+was already touching me. No sight of where it came from, no chance to read it.
+
+The instinct was to raise the delay. The actual fault was narrower and worse: a
+shade retraces the player *exactly*, so every spot it walks through is a spot
+the player stood in --- and arming was decided by the clock alone. Pausing after
+a star is the most natural thing anyone does, and the rule armed whatever was
+retracing that exact spot directly into them. A longer delay would have moved
+the coin toss later, not removed it.
+
+So the wake rule now has two conditions rather than one: its time is up **and**
+it is clear of the player. That is a fairness invariant, not a number, so it
+went under test alongside the catching rule --- one case asserts a shade stays
+asleep long past its hour while it is still on the player
+([`f685d50`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-xiaoma638/commit/f685d50)).
+
+The same session said the red thing read as a monster rather than as a copy of
+me, which is the whole premise. It now wears the player's own comet silhouette
+--- outline while harmless, filled once it can catch you --- and the player is
+a comet rather than a ball, so the shape carries the idea before the colour
+does.
+
 ## What the tests cannot judge
 
 Whether a stranger reaches an ending inside five minutes, and whether the
