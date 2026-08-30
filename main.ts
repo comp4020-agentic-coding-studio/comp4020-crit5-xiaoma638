@@ -3,7 +3,7 @@
 // the page or converts coordinates.
 
 import { initial, step, type Game, type Input } from "./logic.ts";
-import { measure, render } from "./render.ts";
+import { render } from "./render.ts";
 
 let game: Game = initial((performance.now() * 1000) & 0xffff);
 let pending: Input = null;
@@ -12,7 +12,7 @@ let last = 0;
 const stage = document.getElementById("stage") as unknown as SVGSVGElement;
 const again = document.getElementById("again") as HTMLButtonElement;
 
-function aim(target: EventTarget | null): void {
+function aimAt(target: EventTarget | null): void {
   const hit = (target as Element | null)?.closest<Element>(".foe, #seal");
   if (!hit) return;
   if (hit.id === "seal") pending = { kind: "seal" };
@@ -23,14 +23,14 @@ function aim(target: EventTarget | null): void {
 
 stage.addEventListener("pointerdown", (event) => {
   event.preventDefault();
-  aim(event.target);
+  aimAt(event.target);
 });
 
 // role="button" and a tabindex are only true if the keys work.
 stage.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" && event.key !== " ") return;
   event.preventDefault();
-  aim(event.target);
+  aimAt(event.target);
 });
 
 again.addEventListener("click", () => {
@@ -38,11 +38,9 @@ again.addEventListener("click", () => {
   render(game);
 });
 
-window.addEventListener("resize", measure);
-
 function frame(now: number): void {
   // Clamped: a backgrounded tab must not hand the lane one enormous step and
-  // walk every foe through the line at once.
+  // walk every shade through the line at once.
   const dt = last === 0 ? 16 : Math.min(50, now - last);
   last = now;
 

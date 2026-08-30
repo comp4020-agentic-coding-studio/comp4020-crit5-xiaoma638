@@ -6,7 +6,7 @@
     <title>Unsealing</title>
     <meta
       name="description"
-      content="A lane, a staff, and three sealed crystals. Every shot is a choice: the shade closing on you, or the crystal that would make the next shot stronger."
+      content="Your squad fires on its own. All you decide is where it points: at the shades closing in, or at the crystal that would set another one of you free."
     />
 
     <meta property="og:type" content="website" />
@@ -27,136 +27,163 @@
       <svg id="stage" viewBox="0 0 100 56" aria-label="Unsealing">
         <defs>
           <radialGradient id="glow">
-            <stop offset="0%" stop-color="#8ef4ff" stop-opacity="0.55" />
-            <stop offset="100%" stop-color="#8ef4ff" stop-opacity="0" />
+            <stop offset="0%" stop-color="#7ff0d6" stop-opacity="0.4" />
+            <stop offset="100%" stop-color="#7ff0d6" stop-opacity="0" />
           </radialGradient>
-
-          <g id="shade">
-            <path
-              d="M0,-7 C4.5,-7 7,-3 7,1.5 C7,5.5 4,8 0,8 C-4,8 -7,5.5 -7,1.5 C-7,-3 -4.5,-7 0,-7 Z"
-              fill="#2b1f3d"
-              stroke="#5a3f7a"
-              stroke-width="0.6"
-            />
-            <circle cx="-2.4" cy="-0.5" r="1.15" fill="#ff8a6b" />
-            <circle cx="2.4" cy="-0.5" r="1.15" fill="#ff8a6b" />
-          </g>
-
-          <g id="ally">
-            <circle cx="0" cy="-2.6" r="1.7" fill="#bff6ff" />
-            <path d="M0,-1 C2.2,-1 3,1.2 3,4 L-3,4 C-3,1.2 -2.2,-1 0,-1 Z" fill="#bff6ff" />
-          </g>
         </defs>
 
-        <circle id="line-glow" r="7" fill="url(#glow)" />
+        <circle id="line-glow" r="9" fill="url(#glow)" />
         <line id="line" x1="0" y1="0" x2="0" y2="0" />
 
-        <g id="staff">
-          <g transform="scale(0.4)">
-            <line class="shaft" x1="0" y1="0" x2="0" y2="-11" />
-            <path class="gem" d="M0,-15 L3.2,-11 L0,-7 L-3.2,-11 Z" />
+        <g id="allies">
+          <g class="ally off"><g transform="scale(0.38)"><circle class="head" cx="0" cy="-6.4" r="2.7" /><path class="body" d="M0,-4 C3.6,-4 5,-0.6 5,4.6 L-5,4.6 C-5,-0.6 -3.6,-4 0,-4 Z" /></g></g>
+          <g class="ally off"><g transform="scale(0.38)"><circle class="head" cx="0" cy="-6.4" r="2.7" /><path class="body" d="M0,-4 C3.6,-4 5,-0.6 5,4.6 L-5,4.6 C-5,-0.6 -3.6,-4 0,-4 Z" /></g></g>
+          <g class="ally off"><g transform="scale(0.38)"><circle class="head" cx="0" cy="-6.4" r="2.7" /><path class="body" d="M0,-4 C3.6,-4 5,-0.6 5,4.6 L-5,4.6 C-5,-0.6 -3.6,-4 0,-4 Z" /></g></g>
+          <g class="ally off"><g transform="scale(0.38)"><circle class="head" cx="0" cy="-6.4" r="2.7" /><path class="body" d="M0,-4 C3.6,-4 5,-0.6 5,4.6 L-5,4.6 C-5,-0.6 -3.6,-4 0,-4 Z" /></g></g>
+          <g class="ally off"><g transform="scale(0.38)"><circle class="head" cx="0" cy="-6.4" r="2.7" /><path class="body" d="M0,-4 C3.6,-4 5,-0.6 5,4.6 L-5,4.6 C-5,-0.6 -3.6,-4 0,-4 Z" /></g></g>
+          <g class="ally off"><g transform="scale(0.38)"><circle class="head" cx="0" cy="-6.4" r="2.7" /><path class="body" d="M0,-4 C3.6,-4 5,-0.6 5,4.6 L-5,4.6 C-5,-0.6 -3.6,-4 0,-4 Z" /></g></g>
+          <g class="ally off"><g transform="scale(0.38)"><circle class="head" cx="0" cy="-6.4" r="2.7" /><path class="body" d="M0,-4 C3.6,-4 5,-0.6 5,4.6 L-5,4.6 C-5,-0.6 -3.6,-4 0,-4 Z" /></g></g>
+          <g class="ally off"><g transform="scale(0.38)"><circle class="head" cx="0" cy="-6.4" r="2.7" /><path class="body" d="M0,-4 C3.6,-4 5,-0.6 5,4.6 L-5,4.6 C-5,-0.6 -3.6,-4 0,-4 Z" /></g></g>
+        </g>
+
+
+        <g id="foes">
+          <g class="foe off" role="button" tabindex="0" aria-label="Shade">
+            <g transform="scale(0.32)"><path class="hull" d="M0,-7 C4.6,-7 7.2,-3 7.2,1.6 C7.2,5.8 4.2,8.2 0,8.2 C-4.2,8.2 -7.2,5.8 -7.2,1.6 C-7.2,-3 -4.6,-7 0,-7 Z" /><path class="horn" d="M-6.4,-3.4 L-8.8,-8.6 L-3.8,-6 Z" /><path class="horn" d="M6.4,-3.4 L8.8,-8.6 L3.8,-6 Z" /><circle class="eye" cx="-2.6" cy="-0.4" r="1.3" /><circle class="eye" cx="2.6" cy="-0.4" r="1.3" /></g>
+            <circle class="ring" r="4.4" />
+          </g>
+          <g class="foe off" role="button" tabindex="0" aria-label="Shade">
+            <g transform="scale(0.32)"><path class="hull" d="M0,-7 C4.6,-7 7.2,-3 7.2,1.6 C7.2,5.8 4.2,8.2 0,8.2 C-4.2,8.2 -7.2,5.8 -7.2,1.6 C-7.2,-3 -4.6,-7 0,-7 Z" /><path class="horn" d="M-6.4,-3.4 L-8.8,-8.6 L-3.8,-6 Z" /><path class="horn" d="M6.4,-3.4 L8.8,-8.6 L3.8,-6 Z" /><circle class="eye" cx="-2.6" cy="-0.4" r="1.3" /><circle class="eye" cx="2.6" cy="-0.4" r="1.3" /></g>
+            <circle class="ring" r="4.4" />
+          </g>
+          <g class="foe off" role="button" tabindex="0" aria-label="Shade">
+            <g transform="scale(0.32)"><path class="hull" d="M0,-7 C4.6,-7 7.2,-3 7.2,1.6 C7.2,5.8 4.2,8.2 0,8.2 C-4.2,8.2 -7.2,5.8 -7.2,1.6 C-7.2,-3 -4.6,-7 0,-7 Z" /><path class="horn" d="M-6.4,-3.4 L-8.8,-8.6 L-3.8,-6 Z" /><path class="horn" d="M6.4,-3.4 L8.8,-8.6 L3.8,-6 Z" /><circle class="eye" cx="-2.6" cy="-0.4" r="1.3" /><circle class="eye" cx="2.6" cy="-0.4" r="1.3" /></g>
+            <circle class="ring" r="4.4" />
+          </g>
+          <g class="foe off" role="button" tabindex="0" aria-label="Shade">
+            <g transform="scale(0.32)"><path class="hull" d="M0,-7 C4.6,-7 7.2,-3 7.2,1.6 C7.2,5.8 4.2,8.2 0,8.2 C-4.2,8.2 -7.2,5.8 -7.2,1.6 C-7.2,-3 -4.6,-7 0,-7 Z" /><path class="horn" d="M-6.4,-3.4 L-8.8,-8.6 L-3.8,-6 Z" /><path class="horn" d="M6.4,-3.4 L8.8,-8.6 L3.8,-6 Z" /><circle class="eye" cx="-2.6" cy="-0.4" r="1.3" /><circle class="eye" cx="2.6" cy="-0.4" r="1.3" /></g>
+            <circle class="ring" r="4.4" />
+          </g>
+          <g class="foe off" role="button" tabindex="0" aria-label="Shade">
+            <g transform="scale(0.32)"><path class="hull" d="M0,-7 C4.6,-7 7.2,-3 7.2,1.6 C7.2,5.8 4.2,8.2 0,8.2 C-4.2,8.2 -7.2,5.8 -7.2,1.6 C-7.2,-3 -4.6,-7 0,-7 Z" /><path class="horn" d="M-6.4,-3.4 L-8.8,-8.6 L-3.8,-6 Z" /><path class="horn" d="M6.4,-3.4 L8.8,-8.6 L3.8,-6 Z" /><circle class="eye" cx="-2.6" cy="-0.4" r="1.3" /><circle class="eye" cx="2.6" cy="-0.4" r="1.3" /></g>
+            <circle class="ring" r="4.4" />
+          </g>
+          <g class="foe off" role="button" tabindex="0" aria-label="Shade">
+            <g transform="scale(0.32)"><path class="hull" d="M0,-7 C4.6,-7 7.2,-3 7.2,1.6 C7.2,5.8 4.2,8.2 0,8.2 C-4.2,8.2 -7.2,5.8 -7.2,1.6 C-7.2,-3 -4.6,-7 0,-7 Z" /><path class="horn" d="M-6.4,-3.4 L-8.8,-8.6 L-3.8,-6 Z" /><path class="horn" d="M6.4,-3.4 L8.8,-8.6 L3.8,-6 Z" /><circle class="eye" cx="-2.6" cy="-0.4" r="1.3" /><circle class="eye" cx="2.6" cy="-0.4" r="1.3" /></g>
+            <circle class="ring" r="4.4" />
+          </g>
+          <g class="foe off" role="button" tabindex="0" aria-label="Shade">
+            <g transform="scale(0.32)"><path class="hull" d="M0,-7 C4.6,-7 7.2,-3 7.2,1.6 C7.2,5.8 4.2,8.2 0,8.2 C-4.2,8.2 -7.2,5.8 -7.2,1.6 C-7.2,-3 -4.6,-7 0,-7 Z" /><path class="horn" d="M-6.4,-3.4 L-8.8,-8.6 L-3.8,-6 Z" /><path class="horn" d="M6.4,-3.4 L8.8,-8.6 L3.8,-6 Z" /><circle class="eye" cx="-2.6" cy="-0.4" r="1.3" /><circle class="eye" cx="2.6" cy="-0.4" r="1.3" /></g>
+            <circle class="ring" r="4.4" />
+          </g>
+          <g class="foe off" role="button" tabindex="0" aria-label="Shade">
+            <g transform="scale(0.32)"><path class="hull" d="M0,-7 C4.6,-7 7.2,-3 7.2,1.6 C7.2,5.8 4.2,8.2 0,8.2 C-4.2,8.2 -7.2,5.8 -7.2,1.6 C-7.2,-3 -4.6,-7 0,-7 Z" /><path class="horn" d="M-6.4,-3.4 L-8.8,-8.6 L-3.8,-6 Z" /><path class="horn" d="M6.4,-3.4 L8.8,-8.6 L3.8,-6 Z" /><circle class="eye" cx="-2.6" cy="-0.4" r="1.3" /><circle class="eye" cx="2.6" cy="-0.4" r="1.3" /></g>
+            <circle class="ring" r="4.4" />
+          </g>
+          <g class="foe off" role="button" tabindex="0" aria-label="Shade">
+            <g transform="scale(0.32)"><path class="hull" d="M0,-7 C4.6,-7 7.2,-3 7.2,1.6 C7.2,5.8 4.2,8.2 0,8.2 C-4.2,8.2 -7.2,5.8 -7.2,1.6 C-7.2,-3 -4.6,-7 0,-7 Z" /><path class="horn" d="M-6.4,-3.4 L-8.8,-8.6 L-3.8,-6 Z" /><path class="horn" d="M6.4,-3.4 L8.8,-8.6 L3.8,-6 Z" /><circle class="eye" cx="-2.6" cy="-0.4" r="1.3" /><circle class="eye" cx="2.6" cy="-0.4" r="1.3" /></g>
+            <circle class="ring" r="4.4" />
+          </g>
+          <g class="foe off" role="button" tabindex="0" aria-label="Shade">
+            <g transform="scale(0.32)"><path class="hull" d="M0,-7 C4.6,-7 7.2,-3 7.2,1.6 C7.2,5.8 4.2,8.2 0,8.2 C-4.2,8.2 -7.2,5.8 -7.2,1.6 C-7.2,-3 -4.6,-7 0,-7 Z" /><path class="horn" d="M-6.4,-3.4 L-8.8,-8.6 L-3.8,-6 Z" /><path class="horn" d="M6.4,-3.4 L8.8,-8.6 L3.8,-6 Z" /><circle class="eye" cx="-2.6" cy="-0.4" r="1.3" /><circle class="eye" cx="2.6" cy="-0.4" r="1.3" /></g>
+            <circle class="ring" r="4.4" />
+          </g>
+          <g class="foe off" role="button" tabindex="0" aria-label="Shade">
+            <g transform="scale(0.32)"><path class="hull" d="M0,-7 C4.6,-7 7.2,-3 7.2,1.6 C7.2,5.8 4.2,8.2 0,8.2 C-4.2,8.2 -7.2,5.8 -7.2,1.6 C-7.2,-3 -4.6,-7 0,-7 Z" /><path class="horn" d="M-6.4,-3.4 L-8.8,-8.6 L-3.8,-6 Z" /><path class="horn" d="M6.4,-3.4 L8.8,-8.6 L3.8,-6 Z" /><circle class="eye" cx="-2.6" cy="-0.4" r="1.3" /><circle class="eye" cx="2.6" cy="-0.4" r="1.3" /></g>
+            <circle class="ring" r="4.4" />
+          </g>
+          <g class="foe off" role="button" tabindex="0" aria-label="Shade">
+            <g transform="scale(0.32)"><path class="hull" d="M0,-7 C4.6,-7 7.2,-3 7.2,1.6 C7.2,5.8 4.2,8.2 0,8.2 C-4.2,8.2 -7.2,5.8 -7.2,1.6 C-7.2,-3 -4.6,-7 0,-7 Z" /><path class="horn" d="M-6.4,-3.4 L-8.8,-8.6 L-3.8,-6 Z" /><path class="horn" d="M6.4,-3.4 L8.8,-8.6 L3.8,-6 Z" /><circle class="eye" cx="-2.6" cy="-0.4" r="1.3" /><circle class="eye" cx="2.6" cy="-0.4" r="1.3" /></g>
+            <circle class="ring" r="4.4" />
+          </g>
+          <g class="foe off" role="button" tabindex="0" aria-label="Shade">
+            <g transform="scale(0.32)"><path class="hull" d="M0,-7 C4.6,-7 7.2,-3 7.2,1.6 C7.2,5.8 4.2,8.2 0,8.2 C-4.2,8.2 -7.2,5.8 -7.2,1.6 C-7.2,-3 -4.6,-7 0,-7 Z" /><path class="horn" d="M-6.4,-3.4 L-8.8,-8.6 L-3.8,-6 Z" /><path class="horn" d="M6.4,-3.4 L8.8,-8.6 L3.8,-6 Z" /><circle class="eye" cx="-2.6" cy="-0.4" r="1.3" /><circle class="eye" cx="2.6" cy="-0.4" r="1.3" /></g>
+            <circle class="ring" r="4.4" />
+          </g>
+          <g class="foe off" role="button" tabindex="0" aria-label="Shade">
+            <g transform="scale(0.32)"><path class="hull" d="M0,-7 C4.6,-7 7.2,-3 7.2,1.6 C7.2,5.8 4.2,8.2 0,8.2 C-4.2,8.2 -7.2,5.8 -7.2,1.6 C-7.2,-3 -4.6,-7 0,-7 Z" /><path class="horn" d="M-6.4,-3.4 L-8.8,-8.6 L-3.8,-6 Z" /><path class="horn" d="M6.4,-3.4 L8.8,-8.6 L3.8,-6 Z" /><circle class="eye" cx="-2.6" cy="-0.4" r="1.3" /><circle class="eye" cx="2.6" cy="-0.4" r="1.3" /></g>
+            <circle class="ring" r="4.4" />
           </g>
         </g>
 
         <g id="seal" class="off" role="button" tabindex="0" aria-label="Sealed crystal">
-          <g transform="scale(0.36)">
-            <path class="crystal" d="M0,-13 L9,-6 L9,7 L0,14 L-9,7 L-9,-6 Z" />
-            <g class="captive"><use href="#ally" /></g>
-            <text id="seal-count" text-anchor="middle" dominant-baseline="central" y="0">0</text>
+          <g transform="scale(0.4)">
+            <rect class="post" x="-7.5" y="-20" width="15" height="40" rx="2.5" />
+            <rect class="fill" x="-7.5" y="-20" width="15" height="40" rx="2.5" />
+            <g class="captive" transform="translate(0,9) scale(0.9)"><circle class="head" cx="0" cy="-6.4" r="2.7" /><path class="body" d="M0,-4 C3.6,-4 5,-0.6 5,4.6 L-5,4.6 C-5,-0.6 -3.6,-4 0,-4 Z" /></g>
+            <text id="seal-count" text-anchor="middle" dominant-baseline="central" y="-9">0</text>
           </g>
+          <circle class="ring" r="9.5" />
         </g>
 
-        <g id="foes">
-          <g class="foe off" data-slot="0" role="button" tabindex="0" aria-label="Shade">
-            <use href="#shade" transform="scale(0.36)" />
-          </g>
-          <g class="foe off" data-slot="1" role="button" tabindex="0" aria-label="Shade">
-            <use href="#shade" transform="scale(0.36)" />
-          </g>
-          <g class="foe off" data-slot="2" role="button" tabindex="0" aria-label="Shade">
-            <use href="#shade" transform="scale(0.36)" />
-          </g>
-          <g class="foe off" data-slot="3" role="button" tabindex="0" aria-label="Shade">
-            <use href="#shade" transform="scale(0.36)" />
-          </g>
-          <g class="foe off" data-slot="4" role="button" tabindex="0" aria-label="Shade">
-            <use href="#shade" transform="scale(0.36)" />
-          </g>
-          <g class="foe off" data-slot="5" role="button" tabindex="0" aria-label="Shade">
-            <use href="#shade" transform="scale(0.36)" />
-          </g>
-          <g class="foe off" data-slot="6" role="button" tabindex="0" aria-label="Shade">
-            <use href="#shade" transform="scale(0.36)" />
-          </g>
-          <g class="foe off" data-slot="7" role="button" tabindex="0" aria-label="Shade">
-            <use href="#shade" transform="scale(0.36)" />
-          </g>
-          <g class="foe off" data-slot="8" role="button" tabindex="0" aria-label="Shade">
-            <use href="#shade" transform="scale(0.36)" />
-          </g>
-          <g class="foe off" data-slot="9" role="button" tabindex="0" aria-label="Shade">
-            <use href="#shade" transform="scale(0.36)" />
-          </g>
-          <g class="foe off" data-slot="10" role="button" tabindex="0" aria-label="Shade">
-            <use href="#shade" transform="scale(0.36)" />
-          </g>
-          <g class="foe off" data-slot="11" role="button" tabindex="0" aria-label="Shade">
-            <use href="#shade" transform="scale(0.36)" />
-          </g>
-        </g>
-
-        <g id="beams">
-          <line class="beam off" data-beam="0" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="1" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="2" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="3" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="4" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="5" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="6" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="7" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="8" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="9" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="10" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="11" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="12" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="13" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="14" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="15" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="16" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="17" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="18" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="19" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="20" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="21" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="22" x1="0" y1="0" x2="0" y2="0" />
-          <line class="beam off" data-beam="23" x1="0" y1="0" x2="0" y2="0" />
+        <g id="bullets">
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
+          <circle class="bullet off" r="0.8" />
         </g>
 
         <g id="shards">
-          <circle class="shard off" data-shard="0" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="1" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="2" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="3" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="4" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="5" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="6" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="7" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="8" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="9" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="10" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="11" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="12" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="13" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="14" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="15" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="16" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="17" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="18" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="19" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="20" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="21" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="22" r="1.1" cx="0" cy="0" />
-          <circle class="shard off" data-shard="23" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
+          <circle class="shard off" r="1" />
         </g>
       </svg>
 

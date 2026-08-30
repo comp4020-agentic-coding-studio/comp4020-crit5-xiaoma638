@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
-import { initial, SEALS, STAFF, SURGE, step, type Game } from "../logic.ts";
+import { aim, initial, PER_BREAK, SEALS, SQUAD_START, SURGE, step, type Game, type Input } from "../logic.ts";
 
 // The mechanically checkable lines of this week's published spec.
 //
@@ -79,109 +79,139 @@ describe("spec: it teaches itself", () => {
   });
 });
 
-// The one rule of this game put under a focused test, as the spec asks. It is
-// the rule the whole thing turns on: a hit spent on the crystal is a hit not
-// spent on what's walking at you, and this is what that spend buys. It runs on
-// the pure state machine --- no DOM, no clock --- so it stays true while the
-// look of the thing changes underneath it.
+// The one rule of this game put under a focused test, as the spec asks. The
+// squad fires on its own; all you decide is where that fire points, so the
+// cost of going for a crystal is a stretch of time with nothing shooting at
+// what's walking in. This is what that spend buys.
+//
+// It runs on the pure state machine --- no DOM, no clock --- so it stays true
+// while the look of the thing changes underneath it.
 
-function midRound(over: Partial<Game> = {}): Game {
-  return { ...initial(), phase: "playing", cooldown: 0, staff: 0, ...over };
+function atCrystal(hp: number, over: Partial<Game> = {}): Game {
+  const g = initial(3);
+  return {
+    ...g,
+    foes: [],
+    seal: { id: 99, index: 0, hp, maxHp: SEALS[0], hurt: 0 },
+    focus: { kind: "seal" },
+    // One round already in flight, a hair short of the crystal.
+    bullets: [{ id: 50, d: 0.5, target: { kind: "seal" } }],
+    ...over,
+  };
 }
 
-function sealAt(hp: number): Game["seal"] {
-  return { id: 99, index: 0, hp, maxHp: SEALS[0], hurt: 0 };
-}
+describe("spec: breaking a crystal is what frees someone", () => {
+  it("frees one of you on the hit that empties it, and raises the next", () => {
+    const before = atCrystal(1);
+    const after = step(before, null, 100);
 
-describe("spec: breaking a seal is what arms the staff", () => {
-  it("shatters on the hit that takes its last point, and moves the staff up", () => {
-    const before = midRound({ seal: sealAt(1) });
-    const after = step(before, { kind: "seal" }, 0);
-
+    expect(after.allies.length, "a broken crystal is the only thing that grows the squad").toBe(
+      before.allies.length + PER_BREAK,
+    );
     expect(after.broken).toBe(1);
-    expect(after.staff, "a broken seal is the only thing that arms the staff").toBe(1);
-    expect(
-      after.seal?.id,
-      "that seal is gone --- whatever stands there now is the next one",
-    ).not.toBe(before.seal?.id);
+    expect(after.seal?.id, "that crystal is gone --- what stands there now is the next").not.toBe(
+      before.seal?.id,
+    );
   });
 
-  it("leaves the lane bare once the last seal falls, and calls the surge", () => {
+  it("holds while it still has points, and the squad stays the size it was", () => {
+    const before = atCrystal(2);
+    const after = step(before, null, 100);
+
+    expect(after.seal?.hp).toBe(1);
+    expect(after.allies.length, "the squad grows on the break, not on the hit").toBe(
+      before.allies.length,
+    );
+  });
+
+  it("leaves the lane bare once the last crystal falls, and calls the surge", () => {
     const last = SEALS.length - 1;
     const after = step(
-      midRound({
+      atCrystal(1, {
         broken: last,
-        staff: STAFF.length - 1,
         seal: { id: 99, index: last, hp: 1, maxHp: SEALS[last], hurt: 0 },
       }),
-      { kind: "seal" },
-      0,
+      null,
+      100,
     );
 
     expect(after.seal, "nothing else rises --- the round has somewhere to end").toBeNull();
     expect(after.surgeLeft, "the last break is what starts the ending").toBe(SURGE);
   });
+});
 
-  it("stands while it still has points, and the staff waits", () => {
-    const after = step(midRound({ seal: sealAt(2) }), { kind: "seal" }, 0);
+describe("spec: your one input is where the squad points", () => {
+  it("shoots the nearest shade when you have said nothing", () => {
+    const g: Game = {
+      ...initial(3),
+      foes: [
+        { id: 10, d: 0.8, speed: 0.07, hp: 2, maxHp: 2, hurt: 0 },
+        { id: 11, d: 0.3, speed: 0.07, hp: 2, maxHp: 2, hurt: 0 },
+      ],
+      seal: { id: 99, index: 0, hp: 5, maxHp: SEALS[0], hurt: 0 },
+    };
 
-    expect(after.seal?.hp).toBe(1);
-    expect(after.staff, "the staff moves on the break, not on the hit").toBe(0);
+    expect(aim(g), "an untouched game still defends itself").toEqual({ kind: "foe", id: 11 });
   });
 
-  it("spends the staff's cooldown on the hit", () => {
-    const after = step(midRound({ seal: sealAt(2) }), { kind: "seal" }, 0);
+  it("holds the crystal once you pick it, with shades still closing", () => {
+    const g: Game = {
+      ...initial(3),
+      foes: [{ id: 11, d: 0.3, speed: 0.07, hp: 2, maxHp: 2, hurt: 0 }],
+      seal: { id: 99, index: 0, hp: 5, maxHp: SEALS[0], hurt: 0 },
+    };
 
-    expect(
-      after.cooldown,
-      "without a cooldown there is no cost to a hit, and no choice to make",
-    ).toBe(STAFF[0].cooldown);
+    const after = step(g, { kind: "seal" }, 16);
+    expect(aim(after), "that is the whole trade --- fire spent here is fire not spent there").toEqual(
+      { kind: "seal" },
+    );
   });
 
-  it("ignores a hit while the staff is still cooling", () => {
-    const cooling = midRound({ seal: sealAt(1), cooldown: 100 });
-    const after = step(cooling, { kind: "seal" }, 0);
+  it("falls back to the lane when what you picked is gone", () => {
+    const g: Game = {
+      ...initial(3),
+      foes: [{ id: 11, d: 0.3, speed: 0.07, hp: 2, maxHp: 2, hurt: 0 }],
+      focus: { kind: "foe", id: 404 },
+    };
 
-    expect(after.seal?.hp, "a cooling staff fires nothing").toBe(1);
-    expect(after.staff).toBe(0);
+    expect(aim(g), "a squad aimed at nothing would just watch").toEqual({ kind: "foe", id: 11 });
   });
 });
 
-// The other half of the spec's first line: a round has to be losable, and it
-// has to end somewhere. Both are claims about the whole machine over time, not
-// about one transition, so they play it out --- a lazy player who never fires,
-// and one who spends every shot on the nearest threat until the lane is clear
-// enough to spend on the crystal.
+// The rest of the spec's first line is a claim about a whole round rather than
+// one transition, so these play it out: a round has to be losable, and it has
+// to end somewhere.
 
 const FRAME = 16;
 
-function play(choose: (g: Game) => Input, limitMs = 240_000): Game {
-  let g = { ...initial(7), phase: "playing" as const };
+function play(choose: (g: Game) => Input, limitMs = 300_000): Game {
+  let g = initial(7);
   for (let t = 0; t < limitMs; t += FRAME) {
-    if (g.phase === "won" || g.phase === "lost") break;
+    if (g.phase !== "playing") break;
     g = step(g, choose(g), FRAME);
   }
   return g;
 }
 
 describe("spec: a round ends somewhere", () => {
-  it("is lost by standing still --- a wrong move is possible", () => {
-    const g = play(() => null);
+  it("is lost by holding the crystal while the lane fills --- a wrong move is possible", () => {
+    const g = play((state) => (state.seal ? { kind: "seal" } : null));
 
-    expect(g.phase, "shades walk to the line whether or not you fire").toBe("lost");
+    expect(g.phase, "fire spent on the crystal is fire not spent on the lane").toBe("lost");
   });
 
-  it("is winnable: clear the lane, break all three seals, see off the surge", () => {
+  it("is winnable: hold the lane, take the crystals in the gaps, see off the surge", () => {
     const g = play((state) => {
       const nearest = [...state.foes].sort((a, b) => a.d - b.d)[0];
-      // Spend on the crystal only while nothing is close enough to matter.
-      if (nearest && nearest.d < 0.55) return { kind: "foe", id: nearest.id };
-      if (state.seal) return { kind: "seal" };
-      return nearest ? { kind: "foe", id: nearest.id } : null;
+      // Go for the crystal only while nothing is close enough to matter.
+      if (nearest && nearest.d < 0.5) return { kind: "foe", id: nearest.id };
+      return state.seal ? { kind: "seal" } : null;
     });
 
     expect(g.phase, "a game you cannot finish has no ending to reach").toBe("won");
     expect(g.broken).toBe(SEALS.length);
-    expect(g.staff, "three seals is two upgrades and then the ending").toBe(STAFF.length - 1);
+    expect(g.allies.length, "every crystal is two more of you").toBe(
+      SQUAD_START + SEALS.length * PER_BREAK,
+    );
   });
 });

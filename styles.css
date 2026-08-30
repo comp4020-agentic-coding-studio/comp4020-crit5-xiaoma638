@@ -1,11 +1,10 @@
 :root {
   --ink: #07060e;
-  --lane: #1b1630;
-  --crystal: #8ef4ff;
-  --shade: #ff8a6b;
-  --gem-0: #ffd27a;
-  --gem-1: #ffe9a8;
-  --gem-2: #b9f7ff;
+  --ally: #9fe8ff;
+  --ally-warm: #ffe6a8;
+  --crystal: #7ff0d6;
+  --shade: #ff7a5c;
+  --shot: #ffd76a;
   color-scheme: dark;
 }
 
@@ -16,7 +15,7 @@
 body {
   margin: 0;
   min-height: 100svh;
-  background: radial-gradient(120% 90% at 50% 20%, #171232 0%, var(--ink) 70%);
+  background: radial-gradient(130% 100% at 50% 15%, #191338 0%, var(--ink) 72%);
   color: #d9d4ef;
   font-family: system-ui, sans-serif;
   overflow: hidden;
@@ -34,7 +33,7 @@ nav a {
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   text-decoration: none;
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
 nav a:hover,
@@ -43,10 +42,7 @@ nav a:focus-visible {
 }
 
 main {
-  position: relative;
-  display: grid;
-  place-items: center;
-  min-height: 100svh;
+  margin: 0;
 }
 
 #title {
@@ -55,26 +51,28 @@ main {
   top: 3.5svh;
   margin: 0;
   text-align: center;
-  font-size: clamp(1.6rem, 5vw, 3rem);
+  font-size: clamp(1.5rem, 4.5vw, 2.8rem);
   font-weight: 300;
   letter-spacing: 0.32em;
   text-indent: 0.32em;
   color: #cfe9ff;
-  text-shadow: 0 0 24px rgba(142, 244, 255, 0.35);
+  text-shadow: 0 0 24px rgba(127, 240, 214, 0.3);
   pointer-events: none;
-  transition: opacity 900ms ease 200ms;
+  transition: opacity 1s ease;
   z-index: 1;
 }
 
-:root:not([data-phase="opening"]) #title {
+:root[data-started="yes"] #title {
   opacity: 0;
 }
 
-/* --- the stage ---------------------------------------------------------- */
-
+/* The board is the viewport. Centring it inside a grid let the box shrink and
+   slide off-centre, which moved the whole lane without moving a coordinate. */
 #stage {
+  position: fixed;
+  inset: 0;
   width: 100%;
-  height: 100svh;
+  height: 100%;
   touch-action: none;
   user-select: none;
 }
@@ -85,108 +83,100 @@ main {
 
 #line {
   stroke: var(--crystal);
-  stroke-width: 0.5;
-  opacity: 0.5;
+  stroke-width: 0.4;
+  opacity: 0.4;
 }
 
-#staff .shaft {
-  stroke: #6d5a3a;
-  stroke-width: 1.1;
-  stroke-linecap: round;
+/* --- your squad --------------------------------------------------------- */
+
+.ally .head,
+.ally .body {
+  fill: var(--ally);
 }
 
-#staff .gem {
-  fill: var(--gem-0);
-  filter: drop-shadow(0 0 2px var(--gem-0));
-  transition: fill 400ms ease;
+.ally {
+  filter: drop-shadow(0 0 1.6px rgba(159, 232, 255, 0.9));
 }
 
-:root[data-staff="1"] #staff .gem {
-  fill: var(--gem-1);
-  filter: drop-shadow(0 0 3.5px var(--gem-1));
+.bullet {
+  fill: var(--shot);
+  filter: drop-shadow(0 0 1.2px var(--shot));
 }
 
-:root[data-staff="2"] #staff .gem {
-  fill: var(--gem-2);
-  filter: drop-shadow(0 0 5px var(--gem-2));
-}
-
-/* --- what you can hit --------------------------------------------------- */
+/* --- what's coming ------------------------------------------------------ */
 
 .foe,
 #seal {
   cursor: pointer;
 }
 
-.foe use {
-  transition: filter 120ms ease;
-}
-
-.foe.hurt use {
-  filter: brightness(2.4);
-}
-
-#seal .crystal {
-  fill: rgba(142, 244, 255, 0.14);
-  stroke: var(--crystal);
+.foe .hull {
+  fill: #2f2145;
+  stroke: #6b4c93;
   stroke-width: 0.7;
-  filter: drop-shadow(0 0 3px rgba(142, 244, 255, 0.5));
 }
 
-#seal.hurt .crystal {
-  fill: rgba(142, 244, 255, 0.42);
+.foe .horn {
+  fill: #6b4c93;
+}
+
+.foe .eye {
+  fill: var(--shade);
+}
+
+.foe.hurt .hull {
+  fill: #6d4a7d;
+}
+
+.ring {
+  fill: none;
+  stroke: var(--shot);
+  stroke-width: 0.55;
+  stroke-dasharray: 2 2.2;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.aimed .ring {
+  opacity: 0.95;
+}
+
+/* --- the crystal -------------------------------------------------------- */
+
+#seal .post {
+  fill: rgba(127, 240, 214, 0.08);
+  stroke: var(--crystal);
+  stroke-width: 0.9;
+}
+
+#seal .fill {
+  fill: rgba(127, 240, 214, 0.28);
+  stroke: none;
+  transform-box: fill-box;
+  transform-origin: bottom;
+  scale: 1 var(--left, 1);
+  transition: scale 160ms ease-out;
+}
+
+#seal.hurt .fill {
+  fill: rgba(190, 255, 240, 0.55);
+}
+
+#seal .captive .head,
+#seal .captive .body {
+  fill: #eafff9;
 }
 
 #seal .captive {
-  opacity: 0.75;
+  opacity: 0.85;
 }
 
 #seal-count {
-  fill: #eafcff;
-  font-size: 7px;
-  font-weight: 600;
+  fill: #f2fffb;
+  font-size: 11px;
+  font-weight: 700;
   font-family: ui-monospace, monospace;
   pointer-events: none;
-}
-
-/* The opening's one invitation: it pulses on its own, because a touch screen
-   has no hover to discover anything with. It stops for good once the first
-   shade falls. */
-@keyframes calling {
-  0%,
-  100% {
-    filter: drop-shadow(0 0 0 rgba(255, 138, 107, 0));
-  }
-  50% {
-    filter: drop-shadow(0 0 3.5px rgba(255, 138, 107, 0.95));
-  }
-}
-
-.calling {
-  animation: calling 1.15s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .calling {
-    animation-duration: 2.4s;
-  }
-}
-
-.beam {
-  stroke: var(--gem-0);
-  stroke-width: 0.55;
-  stroke-linecap: round;
-  opacity: 0.9;
-}
-
-:root[data-staff="1"] .beam {
-  stroke: var(--gem-1);
-  stroke-width: 0.8;
-}
-
-:root[data-staff="2"] .beam {
-  stroke: var(--gem-2);
-  stroke-width: 1.4;
 }
 
 .shard {
@@ -195,19 +185,28 @@ main {
 
 /* --- how a round ends --------------------------------------------------- */
 
+:root[data-phase="won"] main::after,
+:root[data-phase="lost"] main::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: rgba(7, 6, 14, 0.6);
+  z-index: 2;
+}
+
 #again {
   position: fixed;
   left: 50%;
   top: 50%;
   translate: -50% -50%;
   display: none;
-  width: 4.2rem;
-  height: 4.2rem;
-  border: 1px solid rgba(142, 244, 255, 0.5);
+  width: 4.4rem;
+  height: 4.4rem;
+  border: 1px solid rgba(127, 240, 214, 0.55);
   border-radius: 50%;
-  background: rgba(7, 6, 14, 0.85);
+  background: rgba(7, 6, 14, 0.9);
   color: var(--crystal);
-  font-size: 1.9rem;
+  font-size: 2rem;
   line-height: 1;
   cursor: pointer;
   z-index: 3;
@@ -215,7 +214,7 @@ main {
 
 #again:hover,
 #again:focus-visible {
-  background: rgba(142, 244, 255, 0.14);
+  background: rgba(127, 240, 214, 0.16);
 }
 
 :root[data-phase="won"] #again,
@@ -224,11 +223,11 @@ main {
 }
 
 :root[data-phase="lost"] #stage {
-  filter: saturate(0.25) brightness(0.55);
+  filter: saturate(0.3) brightness(0.6);
   transition: filter 500ms ease;
 }
 
 :root[data-phase="won"] #stage {
-  filter: brightness(1.25);
+  filter: brightness(1.2);
   transition: filter 700ms ease;
 }
