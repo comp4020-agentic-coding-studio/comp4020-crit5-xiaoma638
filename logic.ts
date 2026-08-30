@@ -110,11 +110,15 @@ export function dronesDue(score: number): number {
   return score < 1 ? 0 : Math.min(DELAYS.length, 1 + Math.floor((score - 1) / 2));
 }
 
-export const PLAYER_HIT = 0.02;
-export const DRONE_HIT = 0.017;
+// Hit radii track what is actually drawn. A drone that is visibly on top of
+// you has caught you --- a chassis that passes through a player untouched is a
+// worse lie than a hard game.
+export const PLAYER_HIT = 0.03;
+export const DRONE_HIT = 0.04;
 export const GEM_HIT = 0.032;
 
-/** Drawn a little larger than they catch, so a near miss reads as a near miss. */
+/** Drawn barely larger than they catch: enough that a true graze still reads
+    as a graze, not enough to pass a machine through anybody. */
 export const PLAYER_DRAW = 0.027;
 export const DRONE_DRAW = 0.027;
 
