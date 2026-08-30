@@ -6,10 +6,12 @@
 
 import {
   PLAYER_DRAW,
+  sample,
   SHADE_DRAW,
-  STAR_HIT,
   shadeAt,
+  STAR_HIT,
   type Game,
+  type Shade,
   type Vec,
 } from "./logic.ts";
 
@@ -58,6 +60,32 @@ function glow(color: string, blur: number): void {
 
 function clearGlow(): void {
   ctx.shadowBlur = 0;
+}
+
+/** A comet: a round head facing `heading`, drawn back into a tail. The shades
+    wear the same shape, because a shade is not a monster --- it is a copy of
+    you, and the silhouette is what says so. */
+function comet(x: number, y: number, heading: number, r: number, tail: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(heading);
+  ctx.beginPath();
+  ctx.arc(0, 0, r, -Math.PI / 2, Math.PI / 2);
+  ctx.quadraticCurveTo(-tail * 0.45, r * 0.62, -tail, 0);
+  ctx.quadraticCurveTo(-tail * 0.45, -r * 0.62, 0, -r);
+  ctx.closePath();
+  ctx.restore();
+}
+
+/** Which way a shade is facing: the direction you were going back then. */
+function shadeHeading(g: Game, shade: Shade): number {
+  const t = g.elapsed - shade.delay;
+  const before = sample(g.trail, t - 0.07);
+  const now = sample(g.trail, t);
+  if (!before || !now) return 0;
+  const dx = now.x - before.x;
+  const dy = now.y - before.y;
+  return dx * dx + dy * dy < 1e-8 ? 0 : Math.atan2(dy, dx);
 }
 
 /** A four-pointed sparkle, drawn with concave sides. */
@@ -129,15 +157,31 @@ export function draw(g: Game, reduced: boolean): void {
   // Where they are walking: the same trail, read further back.
   for (const shade of g.shades) {
     const t = g.elapsed - shade.delay;
-    ribbon(g, t - 0.38, t, SHADE, 0.014, 0.42);
+    ribbon(g, t - 0.38, t, SHADE, 0.014, shade.live ? 0.42 : 0.2);
   }
-  ribbon(g, g.elapsed - 0.7, g.elapsed, PLAYER, 0.018, 0.8);
+  // After a star the whole route lights up, a beat before something starts
+  // walking it. That pairing is the only teaching this game gets to do.
+  const lit = g.flash > 0 ? Math.min(1, g.flash / 700) : 0;
+  ribbon(g, g.elapsed - 0.7 - lit * 1.6, g.elapsed, PLAYER, 0.018 + lit * 0.006, 0.8 + lit * 0.2);
 
   if (g.star) {
-    const beat = 1 + Math.sin((g.elapsed - g.star.born) * 4.6) * 0.09;
-    glow(STAR, px(0.05));
+    const age = g.elapsed - g.star.born;
+    // Rings going out on a slow pulse: something with a pull, not a decoration.
+    for (let i = 0; i < 2; i++) {
+      const wave = ((age * 0.75 + i * 0.5) % 1);
+      ctx.strokeStyle = STAR;
+      ctx.globalAlpha = (1 - wave) * 0.3;
+      ctx.lineWidth = px(0.004);
+      ctx.beginPath();
+      ctx.arc(px(g.star.x), px(g.star.y), px(0.03 + wave * 0.1), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    const beat = 1 + Math.sin(age * 4.6) * 0.11;
+    glow(STAR, px(0.06));
     ctx.fillStyle = STAR;
-    sparkle(px(g.star.x), px(g.star.y), px(STAR_HIT * 1.15 * beat));
+    sparkle(px(g.star.x), px(g.star.y), px(STAR_HIT * 1.2 * beat));
     ctx.fill();
     clearGlow();
   }
@@ -146,28 +190,41 @@ export function draw(g: Game, reduced: boolean): void {
     const at = shadeAt(g, shade);
     if (!at) continue;
     // Fades up while it is still harmless, so nothing arrives without warning.
-    const arming = Math.min(1, Math.max(0, (g.elapsed - (shade.armedAt - 0.9)) / 0.9));
-    const live = g.elapsed >= shade.armedAt;
-    ctx.globalAlpha = live ? 0.85 : 0.22 + arming * 0.45;
-    glow(SHADE, px(live ? 0.055 : 0.03));
-    ctx.fillStyle = SHADE;
-    ctx.beginPath();
-    ctx.arc(px(at.x), px(at.y), px(SHADE_DRAW), 0, Math.PI * 2);
-    ctx.fill();
+    const arming = Math.min(1, Math.max(0, (g.elapsed - (shade.wakeAt - 1)) / 1));
+    const live = shade.live;
+    // Outline only until it wakes, then filled: the same shape as the player,
+    // in red, so it reads as a copy rather than as something that wandered in.
+    comet(px(at.x), px(at.y), shadeHeading(g, shade), px(SHADE_DRAW), px(0.07));
+    if (live) {
+      ctx.globalAlpha = 0.82;
+      glow(SHADE, px(0.055));
+      ctx.fillStyle = SHADE;
+      ctx.fill();
+    } else {
+      ctx.globalAlpha = 0.3 + arming * 0.45;
+      ctx.strokeStyle = SHADE;
+      ctx.lineWidth = px(0.005);
+      ctx.setLineDash([px(0.02), px(0.014)]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
     clearGlow();
     ctx.globalAlpha = 1;
   }
 
   if (g.phase !== "lost") {
-    glow(PLAYER, px(0.07));
+    // Brighter the closer the star is: the comet reacts to it before you do.
+    const near = g.star
+      ? Math.max(0, 1 - Math.hypot(g.player.x - g.star.x, g.player.y - g.star.y) / 0.3)
+      : 0;
+    glow(PLAYER, px(0.07 + near * 0.05));
     ctx.fillStyle = PLAYER;
-    ctx.beginPath();
-    ctx.arc(px(g.player.x), px(g.player.y), px(PLAYER_DRAW), 0, Math.PI * 2);
+    comet(px(g.player.x), px(g.player.y), g.heading, px(PLAYER_DRAW), px(0.075 + near * 0.03));
     ctx.fill();
     clearGlow();
     ctx.fillStyle = "#eafeff";
     ctx.beginPath();
-    ctx.arc(px(g.player.x), px(g.player.y), px(PLAYER_DRAW * 0.42), 0, Math.PI * 2);
+    ctx.arc(px(g.player.x), px(g.player.y), px(PLAYER_DRAW * 0.44), 0, Math.PI * 2);
     ctx.fill();
   } else {
     // A ring that came apart where you were caught.
@@ -207,7 +264,7 @@ export function draw(g: Game, reduced: boolean): void {
     ctx.globalAlpha = Math.max(0, p.life / p.max) * 0.9;
     ctx.fillStyle = p.kind === "caught" ? SHADE : STAR;
     ctx.beginPath();
-    ctx.arc(px(p.x), px(p.y), px(0.005), 0, Math.PI * 2);
+    ctx.arc(px(p.x), px(p.y), px(p.kind === "lure" ? 0.0035 : 0.005), 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.globalAlpha = 1;

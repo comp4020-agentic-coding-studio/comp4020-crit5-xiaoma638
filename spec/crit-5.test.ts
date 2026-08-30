@@ -6,6 +6,7 @@ import {
   initial,
   overlaps,
   PLAYER_HIT,
+  SAFE_WAKE,
   SHADE_HIT,
   step,
   WIN_AT,
@@ -147,7 +148,7 @@ function standing(over: Partial<Game> = {}): Game {
 
 describe("spec: the round ends where it should", () => {
   it("is lost the moment an armed shade reaches the player", () => {
-    const g = standing({ shades: [{ id: 1, delay: 1.2, armedAt: 0 }] });
+    const g = standing({ shades: [{ id: 1, delay: 1.2, wakeAt: 0, live: true }] });
 
     const after = step(g, { target: HERE }, 16);
 
@@ -155,7 +156,7 @@ describe("spec: the round ends where it should", () => {
   });
 
   it("does not lose to one that has not armed yet", () => {
-    const g = standing({ shades: [{ id: 1, delay: 1.2, armedAt: 60 }] });
+    const g = standing({ shades: [{ id: 1, delay: 1.2, wakeAt: 60, live: false }] });
 
     const after = step(g, { target: HERE }, 16);
 
@@ -176,5 +177,41 @@ describe("spec: the round ends where it should", () => {
 
     expect(after.phase, "a game you cannot finish has no ending to reach").toBe("won");
     expect(after.score).toBe(WIN_AT);
+  });
+});
+
+// The fairness rule, which is worth as much as the catching rule. A shade
+// retraces you exactly, so the spot it is walking through is a spot you stood
+// in --- and standing still after taking a star is the most natural thing
+// anyone does. Waking one on top of somebody is not difficulty, it is a coin
+// toss they lose, and losing a round you never saw coming reads as a broken
+// game rather than a hard one.
+
+describe("spec: a shade will not wake on top of you", () => {
+  it("stays asleep past its hour while it is still on the player", () => {
+    // Its time is long past, and it is retracing the exact spot she is on.
+    const g = standing({ shades: [{ id: 1, delay: 1.2, wakeAt: 0, live: false }] });
+
+    const after = step(g, { target: HERE }, 16);
+
+    expect(after.shades[0].live, "time alone must not be enough to arm one").toBe(false);
+    expect(after.phase, "and so the round survives standing still").toBe("playing");
+  });
+
+  it("wakes once it is clear of the player", () => {
+    const clear = { x: HERE.x + SAFE_WAKE * 2, y: HERE.y };
+    const g = standing({
+      shades: [{ id: 1, delay: 1.2, wakeAt: 0, live: false }],
+      // The trail now runs through somewhere she is not.
+      trail: [
+        { x: clear.x, y: clear.y, t: 2.5 },
+        { x: clear.x, y: clear.y, t: 5 },
+      ],
+    });
+
+    const after = step(g, { target: HERE }, 16);
+
+    expect(after.shades[0].live, "clear of her, it is fair game").toBe(true);
+    expect(after.phase).toBe("playing");
   });
 });

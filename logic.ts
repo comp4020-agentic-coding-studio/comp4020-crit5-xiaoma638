@@ -21,8 +21,10 @@ export interface Shade {
   id: number;
   /** Seconds it walks behind you. */
   delay: number;
-  /** Elapsed seconds after which it can catch you. */
-  armedAt: number;
+  /** Earliest it may wake. Time alone is not enough --- see `step`. */
+  wakeAt: number;
+  /** True once it can actually catch you. */
+  live: boolean;
 }
 
 export interface Star {
@@ -31,7 +33,7 @@ export interface Star {
   born: number;
 }
 
-export type Spark = "star" | "caught" | "won";
+export type Spark = "star" | "caught" | "won" | "lure";
 
 export interface Particle {
   x: number;
@@ -65,12 +67,16 @@ export const STAR_HIT = 0.032;
 export const PLAYER_DRAW = 0.027;
 export const SHADE_DRAW = 0.027;
 
-/** How far behind each one runs. Slightly different, so they fan out. */
-export const DELAYS = [1.2, 1.65, 1.0, 1.85] as const;
+/** How far behind each one runs. The first hangs well back, because it is the
+    one that has to be understood rather than survived; later ones crowd in. */
+export const DELAYS = [2.2, 1.5, 1.3, 1.15] as const;
 
-/** A new shade is visible but harmless for this long. */
-const ARM_MS = 900;
-const FIRST_ARM_MS = 600;
+/** A shade is visible, and harmless, for this long before it can wake. */
+const ARM_MS = 1000;
+
+/** And it will not wake while it is this close to you, however long it waits.
+    Waking on top of someone is not difficulty, it is a coin toss they lose. */
+export const SAFE_WAKE = 0.15;
 
 /** Exponential follow: firm, but not glued to the cursor. */
 const FOLLOW = 13;
@@ -86,6 +92,12 @@ const STAR_MIN_FROM_SHADE = 0.17;
 
 export interface Game {
   phase: Phase;
+  /** Which way the comet points. Radians. */
+  heading: number;
+  /** Milliseconds left of the trail lighting up after a star. */
+  flash: number;
+  /** Seconds until the star throws another thread towards the player. */
+  lureIn: number;
   /** Seconds of play. Pausing stops this, so the shades stay in step. */
   elapsed: number;
   player: Vec;
@@ -141,13 +153,16 @@ export function initial(world: Vec = { x: 1.6, y: 1 }, seed = 1): Game {
   const player = { x: world.x / 2, y: world.y / 2 };
   return {
     phase: "playing",
+    heading: 0,
+    flash: 0,
+    lureIn: 0.25,
     elapsed: 0,
     player: { ...player },
     target: { ...player },
     trail: [{ x: player.x, y: player.y, t: 0 }],
     // One from the start. It cannot reach you until the trail is long enough,
     // which is the pause that lets the first star be taken in peace.
-    shades: [{ id: 1, delay: DELAYS[0], armedAt: DELAYS[0] + FIRST_ARM_MS / 1000 }],
+    shades: [{ id: 1, delay: DELAYS[0], wakeAt: DELAYS[0] + ARM_MS / 1000, live: false }],
     // Close enough that it is taken almost by accident, which is the lesson.
     star: { x: player.x + 0.19, y: player.y - 0.1, born: 0 },
     score: 0,
@@ -241,6 +256,7 @@ export function step(g: Game, input: Input, dtMs: number): Game {
   const dt = dtMs / 1000;
   const next: Game = {
     ...g,
+    star: g.star ? { ...g.star } : null,
     player: { ...g.player },
     target: { ...g.target },
     world: input.world ? { ...input.world } : { ...g.world },
@@ -262,6 +278,7 @@ export function step(g: Game, input: Input, dtMs: number): Game {
   for (const r of next.rings) r.life -= dtMs;
   next.rings = next.rings.filter((r) => r.life > 0);
   next.shake = Math.max(0, next.shake - dtMs);
+  next.flash = Math.max(0, next.flash - dtMs);
 
   if (g.phase !== "playing") return next;
 
@@ -275,6 +292,15 @@ export function step(g: Game, input: Input, dtMs: number): Game {
   next.player.x = Math.min(Math.max(next.player.x, 0.02), next.world.x - 0.02);
   next.player.y = Math.min(Math.max(next.player.y, 0.02), next.world.y - 0.02);
 
+  // Which way it is pointing, eased so a flick of the wrist does not spin it.
+  const moved = Math.hypot(next.player.x - g.player.x, next.player.y - g.player.y);
+  if (moved > 0.0004) {
+    let turn = Math.atan2(next.player.y - g.player.y, next.player.x - g.player.x) - next.heading;
+    while (turn > Math.PI) turn -= Math.PI * 2;
+    while (turn < -Math.PI) turn += Math.PI * 2;
+    next.heading += turn * Math.min(1, 14 * dt);
+  }
+
   const cutoff = next.elapsed - TRAIL_KEEP_MS / 1000;
   const trail = [...g.trail, { x: next.player.x, y: next.player.y, t: next.elapsed }];
   let drop = 0;
@@ -285,10 +311,21 @@ export function step(g: Game, input: Input, dtMs: number): Game {
     .map((s) => shadeAt(next, s))
     .filter((p): p is Vec => p !== null);
 
+  // A shade wakes when its time is up AND it is clear of you. Standing still
+  // after a star is the most natural thing anyone does, and the old rule armed
+  // whatever happened to be retracing that exact spot straight into them.
+  next.shades = next.shades.map((shade, i) => {
+    if (shade.live) return shade;
+    const at = here[i];
+    if (!at || next.elapsed < shade.wakeAt) return shade;
+    const gap = Math.hypot(at.x - next.player.x, at.y - next.player.y);
+    return gap < SAFE_WAKE ? shade : { ...shade, live: true };
+  });
+
   // Caught by where you have already been.
   for (const [i, shade] of next.shades.entries()) {
     const at = here[i];
-    if (!at || next.elapsed < shade.armedAt) continue;
+    if (!at || !shade.live) continue;
     if (overlaps(next.player, PLAYER_HIT, at, SHADE_HIT)) {
       next.phase = "lost";
       next.endedAt = next.elapsed;
@@ -298,9 +335,46 @@ export function step(g: Game, input: Input, dtMs: number): Game {
     }
   }
 
+  if (next.star) {
+    // The star leans towards whoever is close, and keeps throwing threads of
+    // itself their way. Nothing here says "collect me"; it just behaves like
+    // something that wants to be reached.
+    const reach = Math.hypot(next.player.x - next.star.x, next.player.y - next.star.y);
+    if (reach < 0.24 && reach > 0.001) {
+      const pull = (1 - reach / 0.24) * 1.1 * dt;
+      next.star.x += (next.player.x - next.star.x) * pull;
+      next.star.y += (next.player.y - next.star.y) * pull;
+    }
+
+    next.lureIn -= dt;
+    if (next.lureIn <= 0) {
+      next.lureIn = 0.22;
+      const away = Math.atan2(next.player.y - next.star.y, next.player.x - next.star.x);
+      next.particles = [
+        ...next.particles,
+        {
+          x: next.star.x,
+          y: next.star.y,
+          vx: Math.cos(away) * 0.2,
+          vy: Math.sin(away) * 0.2,
+          life: 700,
+          max: 700,
+          kind: "lure",
+        },
+      ];
+      if (next.particles.length > MAX_PARTICLES) {
+        next.particles.splice(0, next.particles.length - MAX_PARTICLES);
+      }
+    }
+  }
+
   if (next.star && overlaps(next.player, PLAYER_HIT, next.star, STAR_HIT)) {
-    burst(next, next.star, "star", 14);
+    // The first one is the whole lesson, so it lands twice as hard.
+    burst(next, next.star, "star", g.score === 0 ? 30 : 16);
     next.score = g.score + 1;
+    // And the route lights up, a beat before something starts walking it.
+    next.flash = g.score === 0 ? 1400 : 850;
+    next.lureIn = 0.25;
 
     if (next.score >= WIN_AT) {
       next.phase = "won";
@@ -316,7 +390,8 @@ export function step(g: Game, input: Input, dtMs: number): Game {
         {
           id: next.nextId++,
           delay: DELAYS[next.shades.length],
-          armedAt: next.elapsed + ARM_MS / 1000,
+          wakeAt: next.elapsed + ARM_MS / 1000,
+          live: false,
         },
       ];
     }
