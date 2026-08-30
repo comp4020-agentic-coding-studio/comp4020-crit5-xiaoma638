@@ -146,6 +146,7 @@ function drone(over: Partial<Drone> = {}): Drone {
     anchor: 0,
     slot: 0,
     from: { x: 0, y: 0 },
+    pos: null,
     live: false,
     ...over,
   };

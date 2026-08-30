@@ -189,10 +189,23 @@ function securityBay(g: Game): void {
   for (const drone of g.drones) {
     const at = slotAt(g.world, drone.slot, slots);
     const home = drone.state === "docked" || drone.state === "booting";
-    ctx.strokeStyle = home ? "rgba(150, 190, 235, 0.3)" : "rgba(255, 59, 82, 0.32)";
-    ctx.lineWidth = px(0.006);
+
+    // A cradle powering one up strobes red: the alarm reaching the bay, which
+    // is the beat between taking a gem and anything coming for you.
+    const strobe = drone.state === "booting" ? (Math.sin(drone.stateFor * 22) + 1) / 2 : 0;
+
+    ctx.strokeStyle = home
+      ? drone.state === "booting"
+        ? `rgba(255, 59, 82, ${(0.3 + strobe * 0.65).toFixed(3)})`
+        : "rgba(150, 190, 235, 0.3)"
+      : "rgba(255, 59, 82, 0.32)";
+    ctx.lineWidth = px(drone.state === "booting" ? 0.009 : 0.006);
     ctx.strokeRect(px(at.x - 0.06), px(at.y - 0.05), px(0.12), px(0.1));
-    if (!home) {
+
+    if (drone.state === "booting") {
+      ctx.fillStyle = `rgba(255, 59, 82, ${(strobe * 0.2).toFixed(3)})`;
+      ctx.fillRect(px(at.x - 0.06), px(at.y - 0.05), px(0.12), px(0.1));
+    } else if (!home) {
       // An empty cradle, still lit: that one is out on the floor.
       ctx.fillStyle = "rgba(255, 59, 82, 0.09)";
       ctx.fillRect(px(at.x - 0.06), px(at.y - 0.05), px(0.12), px(0.1));

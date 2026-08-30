@@ -35,6 +35,8 @@ export interface Drone {
   /** Which charging slot it sits in, and where that slot is. */
   slot: number;
   from: Vec;
+  /** Live position while it is driving out. Null until it undocks. */
+  pos: Vec | null;
   /** True once it can actually catch you. */
   live: boolean;
 }
@@ -47,25 +49,19 @@ export function stageLength(drone: Drone, state: DroneState): number {
 }
 
 /** Just clear of the cradle: where a drone waits if the trace is not ready.
-    Never back inside the bay --- a drone that reverses into its charger reads
+    Never back inside the bay --- a drone that reverses onto its charger reads
     as broken, which is exactly what it was. */
 export function entryFor(g: Game, drone: Drone): Vec {
   const slot = slotAt(g.world, drone.slot, DELAYS.length);
   return { x: slot.x + 0.22, y: slot.y };
 }
 
-/** How far out of its cradle a leaving drone has got, at its own speed. */
-export function driveOut(g: Game, drone: Drone): { at: Vec; done: boolean } {
-  const slot = slotAt(g.world, drone.slot, DELAYS.length);
-  const target = sample(g.trail, drone.anchor) ?? entryFor(g, drone);
-  const total = Math.hypot(target.x - slot.x, target.y - slot.y);
-  const gone = DRONE_SPEED * drone.stateFor;
-  if (total < 1e-6 || gone >= total) return { at: target, done: true };
-  const t = gone / total;
-  return {
-    at: { x: slot.x + (target.x - slot.x) * t, y: slot.y + (target.y - slot.y) * t },
-    done: false,
-  };
+/** The spot on the trace a launching drone is driving to: where the player was
+    `delay` ago, which is the cold end of the trace and therefore nowhere near
+    them. Driving to where they picked the gem up meant crossing straight over
+    whoever had not moved since. */
+export function launchTarget(g: Game, drone: Drone): Vec {
+  return sample(g.trail, g.elapsed - drone.delay) ?? g.trail[0] ?? entryFor(g, drone);
 }
 
 /** The security bay, along the left wall. */
@@ -129,6 +125,10 @@ export const DELAYS = [3, 2.2, 1.8, 1.5] as const;
 /** It drives out at a shade under your pace, so the crossing is watchable and
     the first one cannot beat you to anywhere. */
 export const DRONE_SPEED = 0.33;
+
+/** Crossing the hall to reach the trace. A shade above the player's pace, or a
+    moving target could never be reached at all. */
+export const LAUNCH_SPEED = 0.52;
 
 /** Powering up in the cradle. The drive out then takes as long as it takes. */
 const BOOTING_S = 0.9;
@@ -212,9 +212,9 @@ export function droneAt(g: Game, drone: Drone): Vec | null {
   // Where the trace it was sent for begins. It drives to that spot and holds
   // over it; by the time its scanner comes up, the trail has caught up to the
   // same place, so following starts without a jump.
-  const start = sample(g.trail, drone.anchor) ?? entryFor(g, drone);
+  const start = drone.pos ?? sample(g.trail, g.elapsed - drone.delay) ?? entryFor(g, drone);
 
-  if (drone.state === "leaving") return driveOut(g, drone).at;
+  if (drone.state === "leaving") return drone.pos ?? slotAt(g.world, drone.slot, DELAYS.length);
   if (drone.state === "locking") return start;
   // Out on the floor and waiting is fine; reversing into the charger is not.
   return sample(g.trail, g.elapsed - drone.delay) ?? entryFor(g, drone);
@@ -256,6 +256,7 @@ export function initial(world: Vec = { x: 1.6, y: 1 }, seed = 1): Game {
       anchor: 0,
       slot: i,
       from: bayAt(world),
+      pos: null,
       live: false,
     })),
     // Close enough that it is taken almost by accident, which is the lesson.
@@ -423,24 +424,38 @@ export function step(g: Game, input: Input, dtMs: number): Game {
     if (drone.state === "booting") {
       return stateFor < BOOTING_S
         ? { ...drone, stateFor }
-        : { ...drone, state: "leaving" as DroneState, stateFor: 0 };
+        : {
+            ...drone,
+            state: "leaving" as DroneState,
+            stateFor: 0,
+            pos: slotAt(next.world, drone.slot, DELAYS.length),
+          };
     }
 
     if (drone.state === "leaving") {
-      // It drives; it does not appear. Arriving is what ends this stage.
-      const moving = { ...drone, stateFor };
-      return driveOut(next, moving).done
-        ? { ...drone, state: "locking" as DroneState, stateFor: 0 }
-        : moving;
+      // It drives, a frame at a time, and arriving is what ends this stage ---
+      // not a timer, so a long crossing takes long and is watched the whole way.
+      const from = drone.pos ?? slotAt(next.world, drone.slot, DELAYS.length);
+      const target = launchTarget(next, drone);
+      const dx = target.x - from.x;
+      const dy = target.y - from.y;
+      const far = Math.hypot(dx, dy);
+      if (far <= LAUNCH_SPEED * dt * 1.5) {
+        return { ...drone, state: "locking" as DroneState, stateFor: 0, pos: target };
+      }
+      const move = LAUNCH_SPEED * dt;
+      return {
+        ...drone,
+        stateFor,
+        pos: { x: from.x + (dx / far) * move, y: from.y + (dy / far) * move },
+      };
     }
 
     if (drone.state === "locking") {
-      const behind = next.elapsed - drone.anchor;
-      // Hold until the trace under it is at least `delay` old, so a long drive
-      // out can only make the first chase gentler, never sharper. Then adopt
-      // that age: the trace it is standing on is exactly where it starts.
-      return stateFor >= LOCKING_S && behind >= drone.delay
-        ? { ...drone, state: "hunting" as DroneState, stateFor: 0, delay: behind }
+      // It is already standing on the trace it will follow, `delay` behind, so
+      // hunting picks up exactly where the scan stopped.
+      return stateFor >= LOCKING_S
+        ? { ...drone, state: "hunting" as DroneState, stateFor: 0, pos: null }
         : { ...drone, stateFor };
     }
     if (drone.live) return { ...drone, stateFor };
