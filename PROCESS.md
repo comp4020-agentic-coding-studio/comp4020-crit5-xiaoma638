@@ -127,9 +127,23 @@ an animal getting up, and the causal chain a player can now watch --- noise
 wakes cat, cat leaves bed, cat finds prints --- is the same chain that explains
 the rules.
 
+The bed did not survive contact either, and the reason sharpened the lesson.
+Four cats slept in it and one walked out --- true in the code, unreadable on
+screen: a cat asleep, another chasing, no way to see they were the same
+population. A heap of animals is not countable at a glance, so the fiction
+could not carry the arithmetic the rules depend on.
+
+Charging slots can. In a gallery at night the drones sit one to a cradle, and
+one that has driven out leaves its cradle visibly empty --- four slots, two
+empty, two machines on the floor ([`e3451d3`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-xiaoma638/commit/e3451d3)). Two other
+things stop being lies there: a patrol drone that glides is a patrol drone,
+where a cat that glides is a cat missing its legs; and a heat trace has a reason
+to cool, so the thing chasing you is visibly reading exactly what you can see.
+
 The general lesson, and the one I would take to any brief that says "no
-instructions": every element has to be accounted for by the world it is in.
-An unexplained element does not become explained by being renamed.
+instructions": every element has to be accounted for by the world it is in,
+and the fiction has to be able to carry whatever the rules count. An
+unexplained element does not become explained by being renamed.
 
 ## What the tests cannot judge
 
