@@ -315,3 +315,60 @@ mistakes, some are moves that worked and should be repeated on purpose.
   coalesce pointer moves to one pass per frame). Decide the ceiling before
   writing the loop
   ([`4a54578`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit4-xiaoma638/commit/4a54578)).
+
+## Carried forward from Crit 5
+
+Building One Second Behind took three complete designs. Most of what follows is
+the cost of the first two.
+
+- **"It teaches itself" is a property of the mechanic, not of the art.** Two
+  builds were thrown away after trying to make an opaque design legible with
+  better shapes and clearer colour. A design whose rules need a legend cannot
+  be lit into one. When a brief asks for something a stranger understands
+  without words, judge the *mechanic* against that before drawing anything ---
+  and if the lesson and the mechanic can be made the same event, there is
+  nothing left over to explain.
+
+- **Write a test that can falsify the design, not just protect it.** A
+  playthrough test --- play a whole round frame by frame against the pure
+  machine, assert the outcome --- found that the greedy line simply won, which
+  meant the trade the entire game was built on did not exist. Every screenshot
+  still looked correct, and no amount of playing it myself would have found it
+  as fast, because I would have played it the way I intended it. A test that
+  asserts a *design claim* is worth more than one that asserts current
+  behaviour.
+
+- **Measure an element from its own box, and expect that box to arrive late.**
+  Sizing the world from `window` put correct coordinates in the wrong place ---
+  everything shifted together with nothing in the state wrong, which is the
+  hardest kind of wrong to see. Worse, the real size can arrive *after* the
+  module runs, so anything placed at startup is placed from a size that was
+  never true. Use `getBoundingClientRect` on the element, watch it with a
+  `ResizeObserver`, and re-place startup state when the first real size lands.
+  (Same shape as the Assignment 1 note about a component that sizes itself from
+  something other than its own box.)
+
+- **Sizing a canvas clears it.** A running loop hides that on the next frame; a
+  paused, finished, or otherwise idle board just goes blank. Redraw at the end
+  of whatever handles the resize.
+
+- **`<use>` builds a shadow tree, and stylesheet selectors do not reach into
+  it.** An entire cast rendered black because every `fill` in `defs` fell back
+  to the default. Inline the shapes, or set the paint on the `<use>` itself.
+  More generally: if a rule appears to have no effect, check that the selector
+  can reach the node at all before changing the rule.
+
+- **A substring replace edits every match, including the ones inside longer
+  selectors.** Inserting a block before `#again {` also rewrote
+  `:root[data-phase="lost"] #again {`, which turned a conditional rule into an
+  unconditional one and left a restart button sitting on the board mid-round.
+  Scripted edits to CSS or code should anchor on something unique, or rewrite a
+  whole named section rather than splice into it.
+
+- **A headless screenshot is a weaker witness than it looks.** The viewport it
+  reports to JavaScript and the one it captures can differ, and can differ
+  between runs on the same command. It is still the fastest way to catch a
+  layout that is plainly wrong --- it found two real bugs this week --- but a
+  disagreement between a measured value and a captured image is not proof the
+  page is broken. Say which of the two a claim rests on, and settle anything
+  that matters in a real browser.

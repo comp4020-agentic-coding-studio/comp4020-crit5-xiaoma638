@@ -1,70 +1,73 @@
 # Process overview
 
-<!-- TEMPLATE: this file is a shape to fill in, not a form. Replace everything
-     in it with your own overview, and delete this comment — `pnpm
-     check:evidence` will remind you if it's still here. -->
-
-A reading-guide to how the work came together --- a map to your process, not an
-essay about it. Markers read this file and follow its citations; they don't
-trawl the repo for evidence you didn't point at, so if a moment mattered, cite
-it.
-
-This file is the shape; the course site's
-[assessment page](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/topics/assessment/#what-you-submit)
-is the requirement, and its
-[word counts](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/topics/assessment/#word-counts)
-cover every deliverable.
-
 ## What I built
 
-One paragraph: the thing, and the idea behind it.
+**One Second Behind** --- a browser game with one mechanic: a glowing dot
+follows your pointer, and about a second later a shade begins walking the exact
+path you just walked. Every star adds another one, on its own delay. The skill
+is that the route you take now is the route you will have to avoid, so the game
+teaches itself by being played rather than by being read.
 
 ## The moments that mattered
 
-Three or four for an assignment; fewer is fine for a weekly prototype. Keep the
-list short so each moment has room to do all four jobs:
+### 1. Two builds thrown away, because the picture needed explaining
 
-1. **what happened** --- the problem, or the thing that went wrong
-2. **what you did instead of the obvious thing** --- the call you made, and why
-   it beat the obvious one
-3. **how you knew it was right** --- the check you ran, the viewport you looked
-   at, what you read before accepting the diff
-4. **the citation** --- a commit or commit range, a `CLAUDE.md` change, a check
-   that went from red to green, a prompt paired with the commit it produced
+The first build was an instrument-like "break the seal" click game; the second
+rebuilt it as a squad, bullets and a numbered gate
+([`48c539d...c51b553`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-xiaoma638/compare/48c539d...c51b553)). Both were playable
+and green. Both failed the same line of the spec: a stranger could not tell
+from the opening screen what anything was.
 
-Jobs 2 and 3 are the ones the repo can't tell a reader on its own, so they're
-where the marks are. The strongest moments are the ones where a correction
-landed in the **harness** --- the standards and checks your work has to satisfy
---- rather than in a retry: a rule added to `CLAUDE.md`, a check wired up, an
-attempt thrown away. Retrying until it passes is the routine case, and changing
-what the work runs against is the skilled one.
+The obvious move was to keep patching the art. The call I made instead was that
+"teaches itself in ten seconds" is a property of the **mechanic**, not of the
+illustration --- so a design that needs a legend cannot be lit into one. The
+third build makes the mechanic and the lesson the same event: take a star, and
+watch something red retrace your own loop
+([`3235c01`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-xiaoma638/commit/3235c01)).
 
-Cite each moment as a link whose text is the commit hash or range and whose
-target is this repo's commit or compare URL, so a reader clicks straight to the
-evidence:
+I knew this rather than guessed it because the second build had already been
+played by someone who was not me, and the first thing they said was that they
+could not tell what the left-hand side was.
 
-- one commit: [`a1b2c3d`](https://github.com/YOUR-ORG/YOUR-REPO/commit/a1b2c3d)
-- a range:
-  [`a1b2c3d...e4f5a6b`](https://github.com/YOUR-ORG/YOUR-REPO/compare/a1b2c3d...e4f5a6b)
+### 2. A test caught a hole no screenshot could
 
-To pair a prompt with the commit it produced, quote the prompt (curated, not a
-full transcript) next to the citation:
+In the squad build I wrote a playthrough test that plays a whole round frame by
+frame against the pure machine. It failed in a way I had not predicted: holding
+fire on the crystal from the first second **won**. Ten seconds of shooting, no
+pressure, no trade --- the entire design premise was absent, and every
+screenshot still looked correct
+([`fc543b1`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-xiaoma638/commit/fc543b1)).
 
-> the prompt, verbatim
+That test became a balance sensor rather than a one-off check: it asserts that
+the greedy line *loses*, so a later tuning pass that flattens the trade goes
+red instead of surviving to the crit.
 
-Screenshots are welcome where one carries the verification better than a
-sentence does. Commit the file to this repo and link it with a **relative**
-path, which is what makes it render on GitHub: `![alt text](docs/before.png)`.
-Images don't count towards the word count and don't replace the citation.
+### 3. Two bugs that only looking could find
 
-## Before you ship
+Both came from Chrome at the two marking viewports, and neither was visible to
+`pnpm check` ([`3235c01`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit5-xiaoma638/commit/3235c01)):
 
-`pnpm check:evidence` verifies your citations resolve to real commits, that a
-reflection entry the marker reads is in `reflections/`, and that your
-`CLAUDE.md` is there --- before a marker ever opens the file. It checks that
-your map is traceable, not that it is good: the marker judges whether your
-small, deliberately chosen set of moments shows real judgement and reflection. A
-green check is not a substitute for that curation.
+- The board's real size can arrive **after** the module runs, and the opening
+  is placed from it --- so the player started off-centre from a size that was
+  never true. It now re-places the round while it is still the opening.
+- Sizing a canvas clears it, and the observer that resizes it ran after a draw.
+  A running loop hides that on the next frame; a paused or finished board just
+  went blank.
 
-Images aren't checked: unlike a citation whose SHA doesn't resolve, a broken
-image is visible the moment this file is rendered on GitHub.
+The first is the same failure as the Assignment 1 note in `CLAUDE.md` about a
+component that sizes itself from something other than its own box --- so it
+went into the harness rather than only into the fix.
+
+### 4. Deciding what a graze means
+
+The collision rule is a pure function of two circles, which let me choose the
+boundary deliberately rather than inherit it: touching at exactly the sum of
+the radii reads as a **miss**. The tests pin all four cases --- clear overlap,
+clear separation, the exact graze, and a hair either side of it --- because
+that one call is what makes a fast pass feel fair rather than cheap.
+
+## What the tests cannot judge
+
+Whether a stranger reaches an ending inside five minutes, and whether the
+opening really does teach itself. Those are settled by four people's hands at
+the crit, not by the suite.
