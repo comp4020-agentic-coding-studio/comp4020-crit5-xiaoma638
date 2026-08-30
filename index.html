@@ -3,17 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>COMP4020 prototype</title>
+    <title>Unsealing</title>
     <meta
       name="description"
-      content="Replace this with one sentence saying what this page is. A search result and a link preview both show it."
+      content="A lane, a staff, and three sealed crystals. Every shot is a choice: the shade closing on you, or the crystal that would make the next shot stronger."
     />
 
-    <!--
-      The link-preview card: public/card.png, 1200x630 --- replace it. The URL
-      resolves against this page, like any link. No og:title/og:description:
-      scrapers fall back to the <title> and description above.
-    -->
     <meta property="og:type" content="website" />
     <meta property="og:image" content="./card.png" />
     <meta name="twitter:card" content="summary_large_image" />
@@ -27,11 +22,145 @@
       </nav>
     </header>
     <main>
-      <h1>COMP4020 prototype</h1>
-      <p>
-        Replace this with your prototype. This week's brief is on the course website;
-        <code>spec/README.md</code> explains how the checks in this repo relate to it.
-      </p>
+      <h1 id="title">Unsealing</h1>
+
+      <svg id="stage" viewBox="0 0 100 56" aria-label="Unsealing">
+        <defs>
+          <radialGradient id="glow">
+            <stop offset="0%" stop-color="#8ef4ff" stop-opacity="0.55" />
+            <stop offset="100%" stop-color="#8ef4ff" stop-opacity="0" />
+          </radialGradient>
+
+          <g id="shade">
+            <path
+              d="M0,-7 C4.5,-7 7,-3 7,1.5 C7,5.5 4,8 0,8 C-4,8 -7,5.5 -7,1.5 C-7,-3 -4.5,-7 0,-7 Z"
+              fill="#2b1f3d"
+              stroke="#5a3f7a"
+              stroke-width="0.6"
+            />
+            <circle cx="-2.4" cy="-0.5" r="1.15" fill="#ff8a6b" />
+            <circle cx="2.4" cy="-0.5" r="1.15" fill="#ff8a6b" />
+          </g>
+
+          <g id="ally">
+            <circle cx="0" cy="-2.6" r="1.7" fill="#bff6ff" />
+            <path d="M0,-1 C2.2,-1 3,1.2 3,4 L-3,4 C-3,1.2 -2.2,-1 0,-1 Z" fill="#bff6ff" />
+          </g>
+        </defs>
+
+        <circle id="line-glow" r="7" fill="url(#glow)" />
+        <line id="line" x1="0" y1="0" x2="0" y2="0" />
+
+        <g id="staff">
+          <g transform="scale(0.4)">
+            <line class="shaft" x1="0" y1="0" x2="0" y2="-11" />
+            <path class="gem" d="M0,-15 L3.2,-11 L0,-7 L-3.2,-11 Z" />
+          </g>
+        </g>
+
+        <g id="seal" class="off" role="button" tabindex="0" aria-label="Sealed crystal">
+          <g transform="scale(0.36)">
+            <path class="crystal" d="M0,-13 L9,-6 L9,7 L0,14 L-9,7 L-9,-6 Z" />
+            <g class="captive"><use href="#ally" /></g>
+            <text id="seal-count" text-anchor="middle" dominant-baseline="central" y="0">0</text>
+          </g>
+        </g>
+
+        <g id="foes">
+          <g class="foe off" data-slot="0" role="button" tabindex="0" aria-label="Shade">
+            <use href="#shade" transform="scale(0.36)" />
+          </g>
+          <g class="foe off" data-slot="1" role="button" tabindex="0" aria-label="Shade">
+            <use href="#shade" transform="scale(0.36)" />
+          </g>
+          <g class="foe off" data-slot="2" role="button" tabindex="0" aria-label="Shade">
+            <use href="#shade" transform="scale(0.36)" />
+          </g>
+          <g class="foe off" data-slot="3" role="button" tabindex="0" aria-label="Shade">
+            <use href="#shade" transform="scale(0.36)" />
+          </g>
+          <g class="foe off" data-slot="4" role="button" tabindex="0" aria-label="Shade">
+            <use href="#shade" transform="scale(0.36)" />
+          </g>
+          <g class="foe off" data-slot="5" role="button" tabindex="0" aria-label="Shade">
+            <use href="#shade" transform="scale(0.36)" />
+          </g>
+          <g class="foe off" data-slot="6" role="button" tabindex="0" aria-label="Shade">
+            <use href="#shade" transform="scale(0.36)" />
+          </g>
+          <g class="foe off" data-slot="7" role="button" tabindex="0" aria-label="Shade">
+            <use href="#shade" transform="scale(0.36)" />
+          </g>
+          <g class="foe off" data-slot="8" role="button" tabindex="0" aria-label="Shade">
+            <use href="#shade" transform="scale(0.36)" />
+          </g>
+          <g class="foe off" data-slot="9" role="button" tabindex="0" aria-label="Shade">
+            <use href="#shade" transform="scale(0.36)" />
+          </g>
+          <g class="foe off" data-slot="10" role="button" tabindex="0" aria-label="Shade">
+            <use href="#shade" transform="scale(0.36)" />
+          </g>
+          <g class="foe off" data-slot="11" role="button" tabindex="0" aria-label="Shade">
+            <use href="#shade" transform="scale(0.36)" />
+          </g>
+        </g>
+
+        <g id="beams">
+          <line class="beam off" data-beam="0" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="1" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="2" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="3" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="4" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="5" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="6" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="7" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="8" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="9" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="10" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="11" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="12" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="13" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="14" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="15" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="16" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="17" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="18" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="19" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="20" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="21" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="22" x1="0" y1="0" x2="0" y2="0" />
+          <line class="beam off" data-beam="23" x1="0" y1="0" x2="0" y2="0" />
+        </g>
+
+        <g id="shards">
+          <circle class="shard off" data-shard="0" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="1" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="2" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="3" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="4" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="5" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="6" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="7" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="8" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="9" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="10" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="11" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="12" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="13" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="14" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="15" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="16" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="17" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="18" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="19" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="20" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="21" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="22" r="1.1" cx="0" cy="0" />
+          <circle class="shard off" data-shard="23" r="1.1" cx="0" cy="0" />
+        </g>
+      </svg>
+
+      <button id="again" type="button" aria-label="Restart">&#8635;</button>
     </main>
     <script type="module" src="./main.ts"></script>
   </body>

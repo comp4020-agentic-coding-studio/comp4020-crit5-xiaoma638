@@ -32,7 +32,9 @@ export const SEAL_D = 0.5;
 
 const HURT_MS = 120;
 const BEAM_MS = 110;
-const SHARD_MS = 620;
+
+/** render.ts reads a shard's remaining life back into a position. */
+export const SHARD_MS = 620;
 
 /** Spawn gap, easing down as the round goes on. */
 const GAP_FROM = 2200;
@@ -108,7 +110,7 @@ export function initial(seed = 1): Game {
     staff: 0,
     cooldown: 0,
     // One slow foe, alone, so there is something to act on and time to find it.
-    foes: [{ id: 1, d: 1, speed: 0.035, hp: 1, maxHp: 1, hurt: 0 }],
+    foes: [{ id: 1, d: 0.85, speed: 0.075, hp: 1, maxHp: 1, hurt: 0 }],
     seal: null,
     broken: 0,
     beams: [],
